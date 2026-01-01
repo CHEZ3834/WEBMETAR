@@ -1,4 +1,3 @@
-/* ===== ORIGINAL THEME (UNCHANGED) ===== */
 :root{
   --bg:#0f1724;
   --card:#0b1220;
@@ -11,33 +10,40 @@
   --breezy:#f1c40f;
   --strong:#e67e22;
   --severe:#e74c3c;
-  --lowvis:#e67e22;
-  --verylowvis:#e74c3c;
 }
 
-html,body{
+*{ box-sizing:border-box; }
+
+html, body{
   margin:0;
   padding:0;
   background:var(--bg);
   font-family:"Segoe UI", Roboto, Arial, sans-serif;
   color:#e6eef8;
-  width:360px;
-  height:auto;
-  overflow-y:auto; /* WEB FIX */
+  width:100%;
+  height:100%;
+  min-height:100vh;
 }
 
-/* ===== TABS ===== */
+/* Use a flex layout to stretch content */
+body{
+  display:flex;
+  flex-direction:column;
+}
+
+/* Tabs */
 .tabs{
   display:flex;
-  margin:10px 10px 0 10px;
+  width:100%;
+  padding:12px;
   border-bottom:1px solid rgba(255,255,255,0.08);
 }
 
 .tab{
   flex:1;
   text-align:center;
-  padding:8px 0;
-  font-size:13px;
+  padding:10px 0;
+  font-size:14px;
   font-weight:600;
   color:var(--muted);
   cursor:pointer;
@@ -59,22 +65,26 @@ html,body{
   border-radius:2px;
 }
 
-/* ===== CARD ===== */
+/* Card: fill remaining screen space */
 .card{
-  margin:10px;
+  flex:1;                 /* Fill remaining vertical space */
+  width:100%;
+  padding:12px;
+  margin:0;               /* remove auto margin so it fills screen */
+  display:flex;
+  flex-direction:column;
   background:linear-gradient(
     180deg,
     rgba(255,255,255,0.02),
     rgba(255,255,255,0.01)
   );
   border-radius:14px;
-  padding:12px;
   box-shadow:0 6px 18px rgba(2,6,23,0.6);
   border:1px solid rgba(255,255,255,0.04);
-  max-height:none;
+  overflow:auto;          /* allow scrolling if content exceeds screen */
 }
 
-/* ===== HEADER ===== */
+/* Header */
 .header{
   display:flex;
   align-items:center;
@@ -88,7 +98,6 @@ html,body{
   font-size:16px;
 }
 
-/* ===== BUTTON ===== */
 .btn{
   background:linear-gradient(180deg,var(--accent),var(--accent-light));
   color:white;
@@ -97,74 +106,53 @@ html,body{
   border-radius:10px;
   cursor:pointer;
   font-weight:600;
-  box-shadow:0 4px 10px rgba(10,20,40,0.45);
 }
 
-.btn:hover{ background:var(--accent-light); }
-
-/* ===== RAW METAR ===== */
+/* Raw */
 .raw-section label{
-  display:block;
   color:var(--muted);
   font-size:12px;
-  margin-bottom:6px;
 }
 
 .raw{
-  margin:0;
+  margin:6px 0 0;
   padding:8px;
   background:rgba(255,255,255,0.02);
   border-radius:10px;
   font-family:"Courier New", monospace;
   font-size:13px;
-  color:#dceffb;
   white-space:pre-wrap;
+  flex-shrink:0;
 }
 
-/* ===== DECODED ===== */
+/* Decoded */
 .decoded-section{
   margin-top:10px;
+  flex-shrink:0;
 }
 
 .decoded-section h3{
-  margin:0 0 8px 0;
+  margin:0 0 6px;
   color:var(--accent);
   font-size:14px;
 }
 
 .decoded{
-  background:linear-gradient(
-    180deg,
-    rgba(255,255,255,0.01),
-    rgba(255,255,255,0)
-  );
   padding:8px;
   border-radius:8px;
   font-size:13px;
   line-height:1.45;
-  overflow:visible; /* WEB FIX */
 }
 
-b.label{
-  color:var(--label);
-  font-weight:700;
-}
+b.label{ color:var(--label); }
 
-/* ===== VALUE COLORS ===== */
-.good{ color:var(--good); }
 .breezy{ color:var(--breezy); font-weight:700; }
 .strong{ color:var(--strong); font-weight:700; }
 .severe{ color:var(--severe); font-weight:700; }
-.lowvis{ color:var(--lowvis); font-weight:700; }
-.verylowvis{ color:var(--verylowvis); font-weight:700; }
-.lowqnh{ color:var(--severe); font-weight:700; }
 
-/* ===== INDENT ===== */
-.cloud-indent{
-  margin-left:20px;
-}
+.cloud-indent{ margin-left:20px; }
 
-/* ===== FOOTER ===== */
+/* Footer */
 .footer{
   margin-top:12px;
   font-size:12px;
@@ -172,9 +160,18 @@ b.label{
   display:flex;
   flex-direction:column;
   gap:6px;
+  flex-shrink:0;
 }
 
 .small{
   font-size:11px;
   color:#7f94ad;
 }
+
+/* Mobile tweaks */
+@media (max-width:480px){
+  .tab{ font-size:15px; padding:12px 0; }
+  .title{ font-size:18px; }
+  .btn{ padding:8px 12px; font-size:14px; }
+}
+
