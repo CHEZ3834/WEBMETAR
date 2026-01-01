@@ -1,49 +1,9 @@
-:root{
-  --bg:#0f1724;
-  --card:#0b1220;
-  --muted:#94a3b8;
-  --accent:#2b6cb0;
-  --accent-light:#3a89d6;
-  --label:#4aa3d6;
-
-  --good:#ffffff;
-  --breezy:#f1c40f;
-  --strong:#e67e22;
-  --severe:#e74c3c;
-}
-
-*{ box-sizing:border-box; }
-
-html, body{
-  margin:0;
-  padding:0;
-  background:var(--bg);
-  font-family:"Segoe UI", Roboto, Arial, sans-serif;
-  color:#e6eef8;
-  width:100%;
-  height:100%;
-  min-height:100vh;
-}
-
-/* Use a flex layout to stretch content */
-body{
-  display:flex;
-  flex-direction:column;
-}
-
 /* Tabs */
-.tabs{
-  display:flex;
-  width:100%;
-  padding:12px;
-  border-bottom:1px solid rgba(255,255,255,0.08);
-}
-
 .tab{
   flex:1;
   text-align:center;
-  padding:10px 0;
-  font-size:14px;
+  padding:12px 0;   /* slightly bigger for tap */
+  font-size:17px;   /* 14px → 17px */
   font-weight:600;
   color:var(--muted);
   cursor:pointer;
@@ -54,123 +14,72 @@ body{
   color:var(--accent-light);
 }
 
-.tab.active::after{
-  content:"";
-  position:absolute;
-  left:25%;
-  bottom:-1px;
-  width:50%;
-  height:2px;
-  background:var(--accent-light);
-  border-radius:2px;
-}
-
-/* Card: fill remaining screen space */
-.card{
-  flex:1;                 /* Fill remaining vertical space */
-  width:100%;
-  padding:12px;
-  margin:0;               /* remove auto margin so it fills screen */
-  display:flex;
-  flex-direction:column;
-  background:linear-gradient(
-    180deg,
-    rgba(255,255,255,0.02),
-    rgba(255,255,255,0.01)
-  );
-  border-radius:14px;
-  box-shadow:0 6px 18px rgba(2,6,23,0.6);
-  border:1px solid rgba(255,255,255,0.04);
-  overflow:auto;          /* allow scrolling if content exceeds screen */
-}
-
 /* Header */
-.header{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin-bottom:8px;
-}
-
 .title{
   font-weight:600;
   color:var(--accent-light);
-  font-size:16px;
+  font-size:20px;   /* 16px → 20px */
 }
 
 .btn{
   background:linear-gradient(180deg,var(--accent),var(--accent-light));
   color:white;
   border:none;
-  padding:6px 10px;
+  padding:8px 12px;  /* slightly bigger padding */
   border-radius:10px;
   cursor:pointer;
   font-weight:600;
+  font-size:16px;   /* scaled up */
 }
 
 /* Raw */
 .raw-section label{
   color:var(--muted);
-  font-size:12px;
+  font-size:15px;   /* 12px → 15px */
 }
 
 .raw{
-  margin:6px 0 0;
-  padding:8px;
+  margin:8px 0 0;
+  padding:10px;
   background:rgba(255,255,255,0.02);
   border-radius:10px;
   font-family:"Courier New", monospace;
-  font-size:13px;
+  font-size:16px;   /* 13px → 16px */
   white-space:pre-wrap;
-  flex-shrink:0;
 }
 
 /* Decoded */
-.decoded-section{
-  margin-top:10px;
-  flex-shrink:0;
-}
-
 .decoded-section h3{
-  margin:0 0 6px;
+  margin:0 0 8px;
   color:var(--accent);
-  font-size:14px;
+  font-size:17px;   /* 14px → 17px */
 }
 
 .decoded{
-  padding:8px;
+  padding:10px;
   border-radius:8px;
-  font-size:13px;
+  font-size:16px;  /* 13px → 16px */
   line-height:1.45;
 }
 
-b.label{ color:var(--label); }
-
-.breezy{ color:var(--breezy); font-weight:700; }
-.strong{ color:var(--strong); font-weight:700; }
-.severe{ color:var(--severe); font-weight:700; }
-
-.cloud-indent{ margin-left:20px; }
-
 /* Footer */
 .footer{
-  margin-top:12px;
-  font-size:12px;
+  margin-top:14px;
+  font-size:15px;   /* 12px → 15px */
   color:var(--muted);
   display:flex;
   flex-direction:column;
-  gap:6px;
-  flex-shrink:0;
+  gap:8px;
 }
 
 .small{
-  font-size:11px;
+  font-size:14px;   /* 11px → 14px */
   color:#7f94ad;
 }
 
 /* Mobile tweaks */
 @media (max-width:480px){
-  .tab{ font-size:15px; padding:12px 0; }
-  .title{ font-size:18px; }
-  .btn{ padding:8px 12px; font-size:14px; }
+  .tab{ font-size:18px; padding:14px 0; }
+  .title{ font-size:22px; }
+  .btn{ padding:10px 14px; font-size:17px; }
 }
