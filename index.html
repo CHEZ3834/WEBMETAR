@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <!-- Lock width to extension width -->
+  <meta name="viewport" content="width=360, initial-scale=1.0">
+  <title>NZ METAR</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" id="tab-nzwn">NZWN</div>
+    <div class="tab" id="tab-nzaa">NZAA</div>
+  </div>
+
+  <!-- Main card -->
+  <div class="card">
+
+    <div class="header">
+      <div class="title">✈️ NZWN METAR</div>
+      <button class="btn" id="refreshBtn">Refresh</button>
+    </div>
+
+    <div class="raw-section">
+      <label>Raw METAR</label>
+      <pre class="raw" id="rawMetar">—</pre>
+    </div>
+
+    <div class="decoded-section">
+      <h3>Decoded Summary</h3>
+      <div class="decoded" id="decodedContent"></div>
+    </div>
+
+    <div class="footer">
+      <div class="issued" id="issuedTime"></div>
+      <div class="updated" id="lastUpdated"></div>
+      <div class="small" id="sourceInfo"></div>
+    </div>
+
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
