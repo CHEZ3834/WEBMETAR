@@ -41,7 +41,6 @@ async function fetchAndRender() {
     UPDATED.textContent = "";
     SOURCE.textContent = "";
 
-    // visible loading delay
     await new Promise(r => setTimeout(r, 1100));
 
     const url = `https://metar.vatsim.net/${currentAirport.toLowerCase()}`;
@@ -92,7 +91,9 @@ function buildDecodedHtml(obj) {
     html += `<div><b class="label">Clouds:</b><br><div class="cloud-indent">${obj.cloudsHtml}</div></div>`;
   }
   if (obj.temperature) html += `<div><b class="label">Temperature:</b> ${obj.temperature}</div>`;
-  if (obj.qnhValue) html += `<div><b class="label">QNH:</b> ${obj.qnhValue} hPa</div>`;
+  if (obj.qnhValue) {
+    html += `<div><b class="label">QNH:</b> ${obj.qnhValue} hPa</div>`;
+  }
   if (obj.kaukau) html += `<div><b class="label">Mt Kaukau Wind:</b> ${obj.kaukau}</div>`;
   return html || "<div>No detailed data decoded.</div>";
 }
@@ -106,14 +107,30 @@ function decodeMetar(metar) {
     const dir = +wind[1];
     const spd = +wind[2];
     const gust = wind[4] ? +wind[4] : null;
+
+    const spdKmh = Math.round(spd * 1.852);
+    const gustKmh = gust ? Math.round(gust * 1.852) : null;
+
     const cls = gust ? classifyWind(gust) : classifyWind(spd);
-    out.wind = `<span class="${cls}">${dir}° (${degToCompass(dir)}) at ${spd} knots${gust ? ` gusting ${gust}` : ""}</span>`;
+
+    out.wind = `<span class="${cls}">
+      ${dir}° (${degToCompass(dir)}) at ${spd} knots (${spdKmh} km/h)
+      ${gust ? ` gusting ${gust} (${gustKmh} km/h)` : ""}
+    </span>`;
   }
 
   const vis = metar.match(/\b(\d{4})\b/);
   if (vis) {
     const v = +vis[1];
-    out.visibility = `${v} metres (${(v / 1000).toFixed(1)} km)`;
+
+    const conditions = [];
+    if (metar.includes("HZ")) conditions.push("Haze");
+    if (metar.includes("BR")) conditions.push("Mist");
+    if (metar.includes("FG")) conditions.push("Fog");
+
+    const conditionText = conditions.length ? " • " + conditions.join(", ") : "";
+
+    out.visibility = `${v} metres (${(v / 1000).toFixed(1)} km)${conditionText}`;
   }
 
   const weather = [];
@@ -144,8 +161,12 @@ function decodeMetar(metar) {
   if (kau) {
     const dir = +kau[1];
     const spd = +kau[2];
+    const spdKmh = Math.round(spd * 1.852);
     const cls = classifyWind(spd);
-    out.kaukau = `<span class="${cls}">${dir}° (${degToCompass(dir)}) at ${spd} knots</span>`;
+
+    out.kaukau = `<span class="${cls}">
+      ${dir}° (${degToCompass(dir)}) at ${spd} knots (${spdKmh} km/h)
+    </span>`;
   }
 
   return out;
