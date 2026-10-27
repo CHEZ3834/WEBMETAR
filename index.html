@@ -2,45 +2,40 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- Lock width to extension width -->
-  <meta name="viewport" content="width=360, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f1724">
   <title>NZ METAR</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <!-- Tabs -->
-  <div class="tabs">
-    <div class="tab active" id="tab-nzwn">NZWN</div>
-    <div class="tab" id="tab-nzaa">NZAA</div>
-  </div>
-
-  <!-- Main card -->
-  <div class="card">
-
-    <div class="header">
+  <nav class="airport-nav" aria-label="Airport selector">
+    <button class="nav-arrow" id="prevAirports" type="button" aria-label="Previous airports" title="Previous airports">‹</button>
+    <div class="tabs" id="airportTabs">
+      <button class="tab active" id="tab-nzwn" type="button" data-airport="NZWN" aria-pressed="true">NZWN</button>
+      <button class="tab" id="tab-nzaa" type="button" data-airport="NZAA" aria-pressed="false">NZAA</button>
+      <button class="tab" id="tab-nzch" type="button" data-airport="NZCH" aria-pressed="false" hidden>NZCH</button>
+    </div>
+    <button class="nav-arrow" id="nextAirports" type="button" aria-label="Next airports" title="Next airports">›</button>
+  </nav>
+  <main class="card">
+    <header class="header">
       <div class="title">✈️ NZWN METAR</div>
-      <button class="btn" id="refreshBtn">Refresh</button>
-    </div>
-
-    <div class="raw-section">
-      <label>Raw METAR</label>
+      <button class="btn" id="refreshBtn" type="button">Refresh</button>
+    </header>
+    <section class="raw-section">
+      <label for="rawMetar">Raw METAR</label>
       <pre class="raw" id="rawMetar">—</pre>
-    </div>
-
-    <div class="decoded-section">
+    </section>
+    <section class="decoded-section">
       <h3>Decoded Summary</h3>
       <div class="decoded" id="decodedContent"></div>
-    </div>
-
-    <div class="footer">
+    </section>
+    <footer class="footer">
       <div class="issued" id="issuedTime"></div>
       <div class="updated" id="lastUpdated"></div>
       <div class="small" id="sourceInfo"></div>
-    </div>
-
-  </div>
-
+    </footer>
+  </main>
   <script src="popup.js"></script>
 </body>
 </html>
