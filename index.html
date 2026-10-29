@@ -1,41 +1,114 @@
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f1724">
-  <title>NZ METAR</title>
+  <meta name="description" content="Live METAR reports with decoded aviation weather, worldwide airport search and temperature summaries.">
+  <title>WEBMETAR — METAR Decoder</title>
   <link rel="stylesheet" href="style.css">
+  <script src="popup.js" defer></script>
 </head>
 <body>
-  <nav class="airport-nav" aria-label="Airport selector">
-    <button class="nav-arrow" id="prevAirports" type="button" aria-label="Previous airports" title="Previous airports">‹</button>
-    <div class="tabs" id="airportTabs">
-      <button class="tab active" id="tab-nzwn" type="button" data-airport="NZWN" aria-pressed="true">NZWN</button>
-      <button class="tab" id="tab-nzaa" type="button" data-airport="NZAA" aria-pressed="false">NZAA</button>
-      <button class="tab" id="tab-nzch" type="button" data-airport="NZCH" aria-pressed="false" hidden>NZCH</button>
-    </div>
-    <button class="nav-arrow" id="nextAirports" type="button" aria-label="Next airports" title="Next airports">›</button>
-  </nav>
-  <main class="card">
-    <header class="header">
-      <div class="title">✈️ NZWN METAR</div>
-      <button class="btn" id="refreshBtn" type="button">Refresh</button>
-    </header>
-    <section class="raw-section">
-      <label for="rawMetar">Raw METAR</label>
-      <pre class="raw" id="rawMetar">—</pre>
+  <main class="app-shell">
+    <section class="airport-search" aria-label="Airport search">
+      <label class="search-label" for="airportSearch">
+        Search airports worldwide
+      </label>
+
+      <div class="search-box">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input
+          id="airportSearch"
+          type="search"
+          placeholder="ICAO, IATA, city or airport name…"
+          autocomplete="off"
+          spellcheck="false"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="airportSearchResults"
+          aria-expanded="false"
+        >
+      </div>
+
+      <div
+        id="airportSearchResults"
+        class="search-results"
+        role="listbox"
+        aria-label="Airport search results"
+        hidden
+      ></div>
     </section>
-    <section class="decoded-section">
-      <h3>Decoded Summary</h3>
-      <div class="decoded" id="decodedContent"></div>
+
+    <nav class="airport-selector" aria-label="Preset airports">
+      <button
+        class="nav-arrow"
+        id="prevAirports"
+        type="button"
+        aria-label="Previous airports"
+        title="Previous airports"
+      >
+        <span aria-hidden="true">‹</span>
+      </button>
+
+      <div class="tabs-viewport">
+        <div class="tabs" id="tabTrack"></div>
+      </div>
+
+      <button
+        class="nav-arrow"
+        id="nextAirports"
+        type="button"
+        aria-label="Next airports"
+        title="Next airports"
+      >
+        <span aria-hidden="true">›</span>
+      </button>
+    </nav>
+
+    <section class="card" aria-label="METAR report">
+      <header class="header">
+        <div>
+          <p class="eyebrow">AVIATION WEATHER</p>
+          <h1 class="title">✈️ NZWN (WLG) METAR</h1>
+        </div>
+
+        <button class="btn" id="refreshBtn" type="button">
+          ↻ Refresh
+        </button>
+      </header>
+
+      <section class="raw-section">
+        <label for="rawMetar">Raw METAR</label>
+        <pre class="raw" id="rawMetar" aria-live="polite">Loading…</pre>
+      </section>
+
+      <section class="decoded-section">
+        <div class="section-heading">
+          <h2>Decoded summary</h2>
+          <span class="live-indicator">
+            <span></span>
+            Live report
+          </span>
+        </div>
+
+        <div class="decoded" id="decodedContent" aria-live="polite">
+          <p class="placeholder">Fetching the latest report…</p>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="issued" id="issuedTime"></div>
+        <div class="updated" id="lastUpdated"></div>
+        <div class="small" id="sourceInfo"></div>
+      </footer>
     </section>
-    <footer class="footer">
-      <div class="issued" id="issuedTime"></div>
-      <div class="updated" id="lastUpdated"></div>
-      <div class="small" id="sourceInfo"></div>
-    </footer>
+
+    <p class="page-note">
+      METAR reports are provided for information. Always consult official
+      aviation sources for operational decisions.
+    </p>
   </main>
-  <script src="popup.js"></script>
 </body>
 </html>
