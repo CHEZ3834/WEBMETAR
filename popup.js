@@ -2,6 +2,7 @@
 
 // ============================================================
 // DOM ELEMENTS
+// Supports both tabTrack and airportTabs.
 // ============================================================
 
 const RAW = document.getElementById("rawMetar");
@@ -23,7 +24,7 @@ const SEARCH_INPUT = document.getElementById("airportSearch");
 const SEARCH_RESULTS = document.getElementById("airportSearchResults");
 
 // ============================================================
-// AIRPORTS AND STATE
+// AIRPORT PRESETS AND SEARCH STATE
 // ============================================================
 
 const AIRPORTS = [
@@ -31,7 +32,6 @@ const AIRPORTS = [
   "NZAA (AKL)",
   "NZCH (CHC)",
   "NZQN (ZQN)",
-  "YBBN (BNE)",
   "EGLL (LHR)",
   "RJTT (HND)",
   "KATL (ATL)",
@@ -58,9 +58,7 @@ let activeSearchIndex = 0;
 // INITIALISATION
 // ============================================================
 
-if (REF) {
-  REF.addEventListener("click", fetchAndRender);
-}
+if (REF) REF.addEventListener("click", fetchAndRender);
 
 if (PREV_PAGE) {
   PREV_PAGE.addEventListener("click", () => changeAirportPage(-1));
@@ -90,16 +88,7 @@ fetchAndRender();
 // ============================================================
 
 function getIcao(airportEntry) {
-  return airportEntry
-    .split("(")[0]
-    .trim()
-    .toUpperCase();
-}
-
-function formatAirportLabel(airport) {
-  return airport.iata
-    ? `${airport.icao} (${airport.iata})`
-    : airport.icao;
+  return airportEntry.split("(")[0].trim().toUpperCase();
 }
 
 function changeAirportPage(direction) {
@@ -167,9 +156,7 @@ function updateTitle() {
 }
 
 function switchAirport(airportEntry) {
-  if (!airportEntry) return;
-
-  if (airportEntry === currentAirport) {
+  if (!airportEntry || airportEntry === currentAirport) {
     renderAirportTabs();
     updateTitle();
     closeAirportSearch();
@@ -178,11 +165,11 @@ function switchAirport(airportEntry) {
 
   currentAirport = airportEntry;
 
-  const index = AIRPORTS.indexOf(airportEntry);
+  const presetIndex = AIRPORTS.indexOf(airportEntry);
 
-  if (index >= 0) {
+  if (presetIndex >= 0) {
     airportPage = Math.min(
-      Math.max(0, index),
+      presetIndex,
       Math.max(0, AIRPORTS.length - PAGE_SIZE)
     );
   }
@@ -196,6 +183,35 @@ function switchAirport(airportEntry) {
 // ============================================================
 // WORLDWIDE AIRPORT SEARCH
 // ============================================================
+
+function formatAirportLabel(airport) {
+  return airport.iata
+    ? `${airport.icao} (${airport.iata})`
+    : airport.icao;
+}
+
+function getPresetForAirport(airport) {
+  return AIRPORTS.find(entry => {
+    const icao = getIcao(entry);
+    const match = entry.match(/\(([^)]+)\)/);
+    const iata = match ? match[1].toUpperCase() : "";
+
+    return icao === airport.icao ||
+      (airport.iata && iata === airport.iata);
+  });
+}
+
+function closeAirportSearch() {
+  if (!SEARCH_RESULTS || !SEARCH_INPUT) return;
+
+  SEARCH_RESULTS.hidden = true;
+  SEARCH_RESULTS.innerHTML = "";
+
+  searchMatches = [];
+  activeSearchIndex = 0;
+
+  SEARCH_INPUT.setAttribute("aria-expanded", "false");
+}
 
 function normalizeSearchText(value) {
   return String(value || "")
@@ -249,7 +265,7 @@ async function loadAirportDatabase() {
         }
       }
     } catch (_) {
-      // Continue without the cache.
+      // Continue without cached data.
     }
 
     const response = await fetch(AIRPORT_DATA_URL, {
@@ -288,9 +304,7 @@ async function loadAirportDatabase() {
       indexes.icao < 0 ||
       indexes.name < 0
     ) {
-      throw new Error(
-        "Airport database format was not recognised"
-      );
+      throw new Error("Airport database format was not recognised");
     }
 
     const airports = [];
@@ -338,7 +352,7 @@ async function loadAirportDatabase() {
         JSON.stringify(airports)
       );
     } catch (_) {
-      // Search can still work if storage is unavailable.
+      // Search remains usable without local storage.
     }
 
     return airportDatabase;
@@ -354,7 +368,6 @@ async function loadAirportDatabase() {
 
 function searchAirports(query) {
   const q = normalizeSearchText(query);
-
   if (!q) return [];
 
   const fallbackDetails = {
@@ -377,11 +390,6 @@ function searchAirports(query) {
       name: "Queenstown Airport",
       city: "Queenstown",
       country: "NZ"
-    },
-    YBBN: {
-      name: "Brisbane Airport",
-      city: "Brisbane",
-      country: "AU"
     },
     EGLL: {
       name: "London Heathrow Airport",
@@ -437,16 +445,12 @@ function searchAirports(query) {
     else if (icao.startsWith(q) || (iata && iata.startsWith(q))) score = 900;
     else if (name.startsWith(q)) score = 850;
     else if (city.startsWith(q)) score = 800;
-    else if (
-      keywords.split(/[;,]/).some(item => item.trim() === q)
-    ) score = 750;
+    else if (keywords.split(/[;,]/).some(k => k.trim() === q)) score = 750;
     else if (name.includes(q)) score = 650;
     else if (city.includes(q)) score = 600;
     else if (keywords.includes(q)) score = 500;
 
-    if (score) {
-      ranked.push({ ...airport, score });
-    }
+    if (score) ranked.push({ ...airport, score });
   }
 
   ranked.sort((a, b) =>
@@ -459,7 +463,6 @@ function searchAirports(query) {
 
   return ranked.filter(airport => {
     if (seen.has(airport.icao)) return false;
-
     seen.add(airport.icao);
     return true;
   }).slice(0, 8);
@@ -475,29 +478,6 @@ function airportCountryName(code) {
   } catch (_) {
     return code;
   }
-}
-
-function getPresetForAirport(airport) {
-  return AIRPORTS.find(entry => {
-    const icao = getIcao(entry);
-    const match = entry.match(/\(([^)]+)\)/);
-    const iata = match ? match[1].toUpperCase() : "";
-
-    return icao === airport.icao ||
-      (airport.iata && iata === airport.iata);
-  });
-}
-
-function closeAirportSearch() {
-  if (!SEARCH_RESULTS || !SEARCH_INPUT) return;
-
-  SEARCH_RESULTS.hidden = true;
-  SEARCH_RESULTS.innerHTML = "";
-
-  searchMatches = [];
-  activeSearchIndex = 0;
-
-  SEARCH_INPUT.setAttribute("aria-expanded", "false");
 }
 
 async function renderAirportSearch() {
@@ -519,10 +499,7 @@ async function renderAirportSearch() {
   try {
     await loadAirportDatabase();
   } catch (error) {
-    console.warn(
-      "Could not load worldwide airport database:",
-      error
-    );
+    console.warn("Could not load worldwide airport database:", error);
   }
 
   const currentQuery = SEARCH_INPUT.value.trim();
@@ -605,8 +582,7 @@ function selectAirportSearchResult(airport) {
 function updateActiveSearchResult() {
   if (!SEARCH_RESULTS) return;
 
-  const buttons =
-    SEARCH_RESULTS.querySelectorAll(".search-result");
+  const buttons = SEARCH_RESULTS.querySelectorAll(".search-result");
 
   buttons.forEach((button, index) => {
     const active = index === activeSearchIndex;
@@ -623,22 +599,15 @@ function updateActiveSearchResult() {
 }
 
 async function handleAirportSearchKeydown(event) {
+  if (!SEARCH_INPUT || !SEARCH_RESULTS) return;
+
   if (event.key === "Escape") {
     closeAirportSearch();
     return;
   }
 
-  if (
-    event.key === "ArrowDown" ||
-    event.key === "ArrowUp"
-  ) {
-    if (
-      !SEARCH_RESULTS ||
-      SEARCH_RESULTS.hidden ||
-      !searchMatches.length
-    ) {
-      return;
-    }
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (SEARCH_RESULTS.hidden || !searchMatches.length) return;
 
     event.preventDefault();
 
@@ -654,7 +623,6 @@ async function handleAirportSearchKeydown(event) {
 
   if (event.key === "Enter") {
     const query = SEARCH_INPUT.value.trim();
-
     if (!query) return;
 
     event.preventDefault();
@@ -663,7 +631,7 @@ async function handleAirportSearchKeydown(event) {
       try {
         await loadAirportDatabase();
       } catch (_) {
-        // Use the preset fallback if necessary.
+        // Try the preset fallback.
       }
 
       searchMatches = searchAirports(query);
@@ -685,23 +653,24 @@ async function handleAirportSearchKeydown(event) {
 // ============================================================
 
 async function fetchAndRender() {
+  if (!RAW || !DEC) return;
+
   const thisRequest = ++requestNumber;
   const airport = getIcao(currentAirport);
 
   RAW.textContent = "Loading…";
   DEC.innerHTML = "";
-  ISSUED.textContent = "";
-  UPDATED.textContent = "";
-  SOURCE.textContent = "";
+
+  if (ISSUED) ISSUED.textContent = "";
+  if (UPDATED) UPDATED.textContent = "";
+  if (SOURCE) SOURCE.textContent = "";
 
   try {
-    // Preserve the existing loading delay.
     await new Promise(resolve => setTimeout(resolve, 1100));
 
     if (thisRequest !== requestNumber) return;
 
-    const url =
-      `https://metar.vatsim.net/${airport.toLowerCase()}`;
+    const url = `https://metar.vatsim.net/${airport.toLowerCase()}`;
 
     const response = await fetch(url, {
       cache: "no-store"
@@ -727,19 +696,23 @@ async function fetchAndRender() {
       DEC.textContent =
         `The METAR service did not return a usable ${airport} report. Try Refresh later.`;
 
-      SOURCE.textContent =
-        `Source: metar.vatsim.net/${airport.toLowerCase()}`;
+      if (SOURCE) {
+        SOURCE.textContent =
+          `Source: metar.vatsim.net/${airport.toLowerCase()}`;
+      }
 
       return;
     }
 
     RAW.textContent = metarText;
 
-    const isAuto = /\bAUTO\b/.test(metarText);
+    if (SOURCE) {
+      const isAuto = /\bAUTO\b/.test(metarText);
 
-    SOURCE.textContent =
-      `• Data from metar.vatsim.net/${airport.toLowerCase()} • ` +
-      `${isAuto ? "AUTO" : "MANUAL"} •`;
+      SOURCE.textContent =
+        `• Data from metar.vatsim.net/${airport.toLowerCase()} • ` +
+        `${isAuto ? "AUTO" : "MANUAL"} •`;
+    }
 
     const decoded = decodeMetar(metarText);
 
@@ -756,26 +729,24 @@ async function fetchAndRender() {
       footerNotes.push(decoded.maintenance);
     }
 
-    if (decoded.runwayStatus) {
-      footerNotes.push(
-        `Runway status:<br>${decoded.runwayStatus}`
-      );
+    if (ISSUED) {
+      ISSUED.innerHTML = footerNotes.length
+        ? `<div style="opacity:0.62;font-size:inherit;font-weight:normal;line-height:1.35;margin-bottom:4px;">${footerNotes.join("<br>")}</div>`
+        : "";
+
+      if (issueMatch) {
+        const issuedDate = parseMetarTime(issueMatch[1]);
+
+        ISSUED.innerHTML +=
+          `<span class="footer-label">METAR issued:</span><br>` +
+          `${formatNZTime(issuedDate)}`;
+      }
     }
 
-    ISSUED.innerHTML = footerNotes.length
-      ? `<div style="opacity:0.62;font-size:inherit;font-weight:normal;line-height:1.35;margin-bottom:4px;">${footerNotes.join("<br>")}</div>`
-      : "";
-
-    if (issueMatch) {
-      const date = parseMetarTime(issueMatch[1]);
-
-      ISSUED.innerHTML +=
-        `<span class="footer-label">METAR issued:</span><br>` +
-        `${formatNZTime(date)}`;
+    if (UPDATED) {
+      UPDATED.innerHTML =
+        `Last updated:<br>${formatNZTime(new Date())}`;
     }
-
-    UPDATED.innerHTML =
-      `Last updated:<br>${formatNZTime(new Date())}`;
 
   } catch (error) {
     if (thisRequest !== requestNumber) return;
@@ -785,99 +756,93 @@ async function fetchAndRender() {
     DEC.textContent =
       `${error.message || error}. METAR could not be fetched.`;
 
-    SOURCE.textContent =
-      `Source: metar.vatsim.net/${airport.toLowerCase()}`;
+    if (SOURCE) {
+      SOURCE.textContent =
+        `Source: metar.vatsim.net/${airport.toLowerCase()}`;
+    }
 
     console.error(error);
   }
 }
 
 // ============================================================
-// BUILD DECODED HTML
+// RENDER DECODED INFORMATION
 // ============================================================
 
 function buildDecodedHtml(obj) {
   let html = "";
 
-  if (obj.wind) {
-    html +=
-      `<div><b class="label">Wind:</b> ${obj.wind}</div>`;
-  }
+  const add = (label, value) => {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ""
+    ) {
+      return;
+    }
 
-  if (obj.windVariation) {
     html +=
-      `<div><b class="label">Wind direction variation:</b> ${obj.windVariation}</div>`;
-  }
+      `<div class="decoded-row">` +
+      `<b class="label">${label}:</b> ${value}</div>`;
+  };
 
-  if (obj.visibility) {
-    html +=
-      `<div><b class="label">Visibility:</b> ${obj.visibility}</div>`;
-  }
+  add("Wind", obj.wind);
+  add("Wind direction variation", obj.windVariation);
+  add("Visibility", obj.visibility);
+  add("Visibility by direction", obj.visibilityByDirection);
 
   if (obj.weatherHtml) {
     html +=
-      `<div><b class="label">Weather:</b><br>` +
+      `<div class="decoded-row"><b class="label">Weather:</b><br>` +
       `<div class="cloud-indent">${obj.weatherHtml}</div></div>`;
   }
 
   if (obj.cloudsHtml) {
     html +=
-      `<div><b class="label">Clouds:</b><br>` +
+      `<div class="decoded-row"><b class="label">Clouds:</b><br>` +
       `<div class="cloud-indent">${obj.cloudsHtml}</div></div>`;
   }
 
-  if (obj.temperature) {
-    html +=
-      `<div><b class="label">Temperature:</b> ${obj.temperature}</div>`;
-  }
-
-  if (obj.preciseTemperature) {
-    html +=
-      `<div><b class="label">Precise temperature:</b> ${obj.preciseTemperature}</div>`;
-  }
-
-  if (obj.sixHourTemps) {
-    html +=
-      `<div><b class="label">6-hour temperature range:</b> ${obj.sixHourTemps}</div>`;
-  }
+  add("Temperature", obj.temperature);
+  add("Precise temperature / dew point", obj.preciseTemperature);
+  add("6-hour temperature range", obj.sixHourTemps);
+  add("24-hour temperature extremes", obj.extremeTemps);
 
   if (obj.qnhValue !== undefined) {
     html +=
-      `<div><b class="label">QNH:</b> ` +
-      `<span class="${obj.qnhClass || ""}">${obj.qnhValue} hPa ${obj.qnhLabel || ""}</span></div>`;
+      `<div class="decoded-row"><b class="label">QNH:</b> ` +
+      `<span style="color:#000;font-weight:400">${obj.qnhValue} hPa</span> ` +
+      `<span class="${obj.qnhClass || ""}">${obj.qnhLabel || ""}</span></div>`;
   }
 
-  if (obj.altimeter) {
+  add("Altimeter setting", obj.altimeter);
+  add("Sea-level pressure", obj.seaLevelPressure);
+  add("Recent weather", obj.recentWeather);
+  add("Precipitation", obj.precipitation);
+  add("Peak wind", obj.peakWind);
+  add("Wind shift", obj.windShift);
+  add("Pressure tendency", obj.pressureTendency);
+  add("Lightning", obj.lightning);
+  add("Hail size", obj.hailSize);
+
+  if (obj.rvrHtml) {
     html +=
-      `<div><b class="label">Altimeter:</b> ${obj.altimeter}</div>`;
+      `<div class="decoded-row"><b class="label">Runway visual range:</b><br>` +
+      `<div class="cloud-indent">${obj.rvrHtml}</div></div>`;
   }
 
-  if (obj.seaLevelPressure) {
+  if (obj.runwayStatus) {
     html +=
-      `<div><b class="label">Sea-level pressure:</b> ${obj.seaLevelPressure}</div>`;
+      `<div class="decoded-row"><b class="label">Runway condition:</b><br>` +
+      `<div class="cloud-indent">${obj.runwayStatus}</div></div>`;
   }
 
-  if (obj.extremeTemps) {
-    html +=
-      `<div><b class="label">24-hour temperature extremes:</b> ${obj.extremeTemps}</div>`;
-  }
+  add("Mt Kaukau Wind", obj.kaukau);
+  add("Sugarloaf Wind", obj.sugarloaf);
+  add("Trend", obj.trend);
 
-  if (obj.kaukau) {
-    html +=
-      `<div><b class="label">Mt Kaukau Wind:</b> ${obj.kaukau}</div>`;
-  }
-
-  if (obj.sugarloaf) {
-    html +=
-      `<div><b class="label">Sugarloaf Wind:</b> ${obj.sugarloaf}</div>`;
-  }
-
-  if (obj.trend) {
-    html +=
-      `<div><b class="label">Trend:</b> ${obj.trend}</div>`;
-  }
-
-  return html || "<div>No detailed data decoded.</div>";
+  return html ||
+    "<div>No decodable weather groups were found in this report.</div>";
 }
 
 // ============================================================
@@ -889,10 +854,12 @@ function decodeMetar(metar) {
 
   if (!metar) return out;
 
-  const parts = metar.split(/\sRMK\s/);
-  const mainPart = parts[0];
-  const remarksPart = parts[1] || "";
-  const mainTokens = mainPart.trim().split(/\s+/);
+  const parts = metar.split(/\sRMK\s/i);
+  const mainPart = parts[0].trim();
+  const remarksPart = parts.slice(1).join(" RMK ").trim();
+
+  const mainTokens = mainPart.split(/\s+/).filter(Boolean);
+  const remarkTokens = remarksPart.split(/\s+/).filter(Boolean);
 
   // ----------------------------------------------------------
   // WIND
@@ -903,13 +870,10 @@ function decodeMetar(metar) {
   );
 
   if (wind) {
-    const dir = wind[1] === "VRB" ? null : Number(wind[1]);
+    const direction =
+      wind[1] === "VRB" ? null : Number(wind[1]);
 
-    const speedOverRange = wind[2].startsWith("P");
     const speed = Number(wind[2].replace(/^P/, ""));
-
-    const gustOverRange =
-      Boolean(wind[3]) && wind[3].startsWith("P");
 
     const gust = wind[3]
       ? Number(wind[3].replace(/^P/, ""))
@@ -917,73 +881,56 @@ function decodeMetar(metar) {
 
     const unit = wind[4];
 
-    const factorToKmh = {
-      KT: 1.852,
-      MPS: 3.6,
-      KMH: 1
-    }[unit];
+    const toKmh =
+      unit === "KT" ? 1.852 :
+      unit === "MPS" ? 3.6 : 1;
 
-    const speedKmh = Math.round(speed * factorToKmh);
+    const toKnots =
+      unit === "KT" ? 1 :
+      unit === "MPS" ? 1.943844 : 1 / 1.852;
 
-    const gustKmh = gust !== null
-      ? Math.round(gust * factorToKmh)
-      : null;
+    const speedKmh = Math.round(speed * toKmh);
 
-    const speedKnots = {
-      KT: speed,
-      MPS: speed * 1.943844,
-      KMH: speed / 1.852
-    }[unit];
+    const gustKmh = gust === null
+      ? null
+      : Math.round(gust * toKmh);
 
-    const gustKnots = gust !== null
-      ? {
-          KT: gust,
-          MPS: gust * 1.943844,
-          KMH: gust / 1.852
-        }[unit]
-      : null;
+    const speedLabel =
+      unit === "KT"
+        ? `${speed} kt (${speedKmh} km/h)`
+        : unit === "MPS"
+          ? `${speed} m/s (${speedKmh} km/h)`
+          : `${speed} km/h`;
 
-    const classValue =
-      gustKnots !== null ? gustKnots : speedKnots;
+    const gustLabel = gust === null
+      ? ""
+      : unit === "KT"
+        ? `, gusting ${gust} kt (${gustKmh} km/h)`
+        : unit === "MPS"
+          ? `, gusting ${gust} m/s (${gustKmh} km/h)`
+          : `, gusting ${gust} km/h`;
 
-    const windClass = classifyWind(classValue);
+    const directionLabel =
+      direction === null
+        ? "Variable direction"
+        : direction === 0 && speed === 0
+          ? "Calm"
+          : `${direction}° (${degToCompass(direction)})`;
 
-    const directionText = dir === null
-      ? "Variable direction"
-      : `${dir}° (${degToCompass(dir)})`;
+    const classificationSpeed =
+      (gust === null ? speed : gust) * toKnots;
 
-    const speedText =
-      `${speedOverRange ? "more than " : ""}${speed}`;
-
-    let unitText;
-
-    if (unit === "MPS") {
-      unitText = `${speedText} m/s (${speedKmh} km/h)`;
-    } else if (unit === "KMH") {
-      unitText = `${speedText} km/h`;
-    } else {
-      unitText = `${speedText} knots (${speedKmh} km/h)`;
-    }
-
-    let gustText = "";
-
-    if (gust !== null) {
-      const gustValue =
-        `${gustOverRange ? "more than " : ""}${gust}`;
-
-      if (unit === "MPS") {
-        gustText =
-          `, gusting ${gustValue} m/s (${gustKmh} km/h)`;
-      } else if (unit === "KMH") {
-        gustText = `, gusting ${gustValue} km/h`;
-      } else {
-        gustText =
-          `, gusting ${gustValue} knots (${gustKmh} km/h)`;
-      }
-    }
+    const windClass = classificationSpeed === 0
+      ? "good"
+      : classifyWind(classificationSpeed);
 
     out.wind =
-      `<span class="${windClass}">${directionText} at ${unitText}${gustText}</span>`;
+      `<span class="${windClass}">` +
+      `${directionLabel}` +
+      `${speed === 0 && direction === 0
+        ? ""
+        : ` at ${speedLabel}${gustLabel}`}` +
+      `</span>`;
   }
 
   const windVariation = mainPart.match(
@@ -992,43 +939,67 @@ function decodeMetar(metar) {
 
   if (windVariation) {
     out.windVariation =
-      `${windVariation[1]}° to ${windVariation[2]}°`;
+      `${windVariation[1]}° to ${windVariation[2]}° (direction varies)`;
   }
 
   // ----------------------------------------------------------
   // VISIBILITY
+  // Supports metric visibility, CAVOK, US miles and fractions.
   // ----------------------------------------------------------
 
-  let visibilityToken = null;
-
-  const timestampIndex = mainTokens.findIndex(
+  const timeIndex = mainTokens.findIndex(
     token => /^\d{6}Z$/.test(token)
   );
 
-  if (timestampIndex >= 0) {
-    for (const token of mainTokens.slice(timestampIndex + 1)) {
-      if (/^(AUTO|COR)$/.test(token)) continue;
+  let visibilityToken = null;
+
+  if (timeIndex >= 0) {
+    for (let i = timeIndex + 1; i < mainTokens.length; i++) {
+      const token = mainTokens[i];
+
+      if (/^(AUTO|COR|AMD)$/.test(token)) continue;
 
       if (
-        /^(?:\d{3}|VRB)P?\d{2,3}(?:GP?\d{2,3})?(KT|MPS|KMH)$/.test(token)
+        /^(\d{3}|VRB)P?\d{2,3}(?:GP?\d{2,3})?(KT|MPS|KMH)$/.test(token)
       ) {
         continue;
       }
 
-      if (
-        token === "CAVOK" ||
-        /^\d{4}$/.test(token) ||
-        /^(?:P|M)?(?:\d+(?:\.\d+)?|\d+\/\d+)SM$/.test(token)
-      ) {
+      if (token === "CAVOK" || /^\d{4}$/.test(token)) {
         visibilityToken = token;
         break;
       }
 
       if (
+        /^(?:P|M)?(?:\d+(?:\.\d+)?|\d+\/\d+)SM$/.test(token)
+      ) {
+        visibilityToken = token;
+
+        if (
+          i > 0 &&
+          /^\d+$/.test(mainTokens[i - 1]) &&
+          /^\d+\/\d+SM$/.test(token)
+        ) {
+          visibilityToken = `${mainTokens[i - 1]} ${token}`;
+        }
+
+        break;
+      }
+
+      if (/^\d+\/\d+SM$/.test(token)) {
+        visibilityToken =
+          i > 0 && /^\d+$/.test(mainTokens[i - 1])
+            ? `${mainTokens[i - 1]} ${token}`
+            : token;
+
+        break;
+      }
+
+      if (
         /^(?:\+|-)?(?:VC)?(?:(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|SA|DU|HZ|FU|VA|SQ|PO|DS|SS|FC)|TS)$/.test(token) ||
-        /^(?:FEW|SCT|BKN|OVC)\d{3}(?:CB|TCU)?$/.test(token) ||
-        /^(?:VV\d{3}|VV\/\/\/|SKC|NSC|NCD|CLR)$/.test(token) ||
-        /^(?:M?\d{2})\/(?:M?\d{2}|\/\/\/)$/.test(token) ||
+        /^(FEW|SCT|BKN|OVC)\d{3}/.test(token) ||
+        /^VV(?:\d{3}|\/\/\/)$/.test(token) ||
+        /^(M?\d{2})\/(M?\d{2}|\/\/\/)$/.test(token) ||
         /^Q\d{4}$/.test(token) ||
         /^A\d{4}$/.test(token)
       ) {
@@ -1037,170 +1008,143 @@ function decodeMetar(metar) {
     }
   }
 
-  if (visibilityToken && /^\d{4}$/.test(visibilityToken)) {
-    const value = Number(visibilityToken);
-    const conditions = [];
-
-    if (/\bHZ\b/.test(mainPart)) conditions.push("Haze");
-    if (/\bBR\b/.test(mainPart)) conditions.push("Mist");
-    if (/\bFG\b/.test(mainPart)) conditions.push("Fog");
-    if (/\bFU\b/.test(mainPart)) conditions.push("Smoke");
-    if (/\bDU\b/.test(mainPart)) conditions.push("Dust");
-    if (/\bSA\b/.test(mainPart)) conditions.push("Sand");
-
-    let visibilityText = value === 9999
-      ? "10 km or more (9999)"
-      : `${value} metres (${(value / 1000).toFixed(1)} km)`;
-
-    if (conditions.length) {
-      visibilityText += ` • ${conditions.join(", ")}`;
-    }
-
-    out.visibility = visibilityText;
+  if (visibilityToken === "CAVOK") {
+    out.visibility =
+      "10 km or more; no significant weather and no cloud below 5,000 ft (CAVOK)";
 
   } else if (
     visibilityToken &&
-    /SM$/.test(visibilityToken)
+    /^\d{4}$/.test(visibilityToken)
   ) {
-    const milesToken = visibilityToken.slice(0, -2);
-    const prefix = /^[PM]/.test(milesToken)
-      ? milesToken[0]
+    const metres = Number(visibilityToken);
+
+    out.visibility = metres === 9999
+      ? "10 km or more (9999)"
+      : `${metres.toLocaleString("en-NZ")} m (${(metres / 1000).toFixed(1)} km)`;
+
+  } else if (visibilityToken && /SM$/.test(visibilityToken)) {
+    const normalized = visibilityToken
+      .replace(/SM$/, "")
+      .trim();
+
+    const prefix = /^[PM]/.test(normalized)
+      ? normalized[0]
       : "";
 
-    const miles = parseUsFraction(
-      milesToken.replace(/^[PM]/, "")
-    );
+    const value = normalized.replace(/^[PM]/, "");
+    const pieces = value.split(/\s+/);
+
+    let miles = 0;
+
+    if (pieces.length === 2) {
+      miles =
+        Number(pieces[0]) + parseUsFraction(pieces[1]);
+    } else {
+      miles = parseUsFraction(pieces[0]);
+    }
 
     const kilometres = miles * 1.609344;
 
-    if (prefix === "P") {
-      out.visibility =
-        `${kilometres.toFixed(1)} km or more (${visibilityToken})`;
-    } else if (prefix === "M") {
-      out.visibility =
-        `less than ${kilometres.toFixed(1)} km (${visibilityToken})`;
-    } else {
-      out.visibility =
-        `${kilometres.toFixed(1)} km (${visibilityToken})`;
-    }
-
-  } else if (visibilityToken === "CAVOK") {
     out.visibility =
-      "10 km or more; no significant weather or low cloud (CAVOK)";
+      prefix === "P"
+        ? `${kilometres.toFixed(1)} km or more (${visibilityToken})`
+        : prefix === "M"
+          ? `less than ${kilometres.toFixed(1)} km (${visibilityToken})`
+          : `${kilometres.toFixed(1)} km (${visibilityToken})`;
+  }
+
+  const directionalVisibility = mainPart.match(
+    /\b(\d{4})\s*(N|NE|E|SE|S|SW|W|NW)\b/
+  );
+
+  if (directionalVisibility) {
+    out.visibilityByDirection =
+      `${directionalVisibility[1]} m to the ${directionalVisibility[2]}`;
   }
 
   // ----------------------------------------------------------
-  // WEATHER
+  // PRESENT WEATHER
   // ----------------------------------------------------------
 
-  const weatherCodePattern =
-    /^(?:\+|-)?(?:VC)?(?:(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|SA|DU|HZ|FU|VA|SQ|PO|DS|SS|FC)|TS)$/;
+  const weatherPattern =
+    /^(\+|-)?(VC)?(MI|PR|BC|DR|BL|SH|TS|FZ)?(DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|SA|DU|HZ|FU|VA|SQ|PO|DS|SS|FC|TS)$/;
 
-  const weatherTokens = mainTokens.filter(
-    token => weatherCodePattern.test(token)
-  );
+  const weatherDescriptions = {
+    DZ: "drizzle",
+    RA: "rain",
+    SN: "snow",
+    SG: "snow grains",
+    IC: "ice crystals",
+    PL: "ice pellets",
+    GR: "hail",
+    GS: "small hail / snow pellets",
+    UP: "unknown precipitation",
+    FG: "fog",
+    BR: "mist",
+    SA: "sand",
+    DU: "dust",
+    HZ: "haze",
+    FU: "smoke",
+    VA: "volcanic ash",
+    SQ: "squalls",
+    PO: "dust / sand whirls",
+    DS: "duststorm",
+    SS: "sandstorm",
+    FC: "funnel cloud / tornado"
+  };
+
+  const descriptorDescriptions = {
+    MI: "shallow",
+    PR: "partial",
+    BC: "patches of",
+    DR: "low drifting",
+    BL: "blowing",
+    SH: "showers of",
+    TS: "thunderstorm with",
+    FZ: "freezing"
+  };
 
   const weather = [];
 
-  const rainTokens = weatherTokens.filter(
-    token => /RA$/.test(token)
-  );
+  for (const token of mainTokens) {
+    const match = token.match(weatherPattern);
+    if (!match) continue;
 
-  const drizzleTokens = weatherTokens.filter(
-    token => /DZ$/.test(token)
-  );
+    const intensity =
+      match[1] === "+" ? "Heavy " :
+      match[1] === "-" ? "Light " : "";
 
-  const snowTokens = weatherTokens.filter(
-    token => /(?:SN|SG|IC|PL|GR|GS|UP)$/.test(token)
-  );
+    const vicinity = match[2]
+      ? "In the vicinity: "
+      : "";
 
-  const thunderTokens = weatherTokens.filter(
-    token => /^(?:\+|-)?(?:VC)?TS(?:RA|SN|GS|GR|DZ)?$/.test(token)
-  );
+    const descriptor = match[3]
+      ? `${descriptorDescriptions[match[3]]} `
+      : "";
 
-  const thunderstormWithRain = thunderTokens.some(
-    token => /TSRA$/.test(token)
-  );
+    const phenomenon =
+      weatherDescriptions[match[4]] ||
+      (match[4] === "TS" ? "thunderstorm" : match[4]);
 
-  if (thunderstormWithRain) {
-    const rainCode = rainTokens[0] || "RA";
+    let description =
+      `${vicinity}${intensity}${descriptor}${phenomenon}`;
 
-    const intensity = rainCode.startsWith("+")
-      ? "heavy "
-      : rainCode.startsWith("-")
-        ? "light "
-        : "";
+    description = description.replace(
+      /\b(thunderstorm with) thunderstorm\b/i,
+      "thunderstorm"
+    );
 
-    weather.push(`• Thunderstorm with ${intensity}rain`);
-
-  } else if (rainTokens.some(token => token.startsWith("+"))) {
-    weather.push("• Heavy rain");
-
-  } else if (rainTokens.some(token => token.startsWith("-"))) {
-    weather.push("• Light rain");
-
-  } else if (rainTokens.length) {
-    weather.push("• Rain");
-  }
-
-  if (drizzleTokens.some(token => token.startsWith("-"))) {
-    weather.push("• Light drizzle");
-  } else if (drizzleTokens.length) {
-    weather.push("• Drizzle");
-  }
-
-  if (snowTokens.length) {
-    weather.push("• Snow or frozen precipitation");
-  }
-
-  if (
-    thunderTokens.length &&
-    !thunderstormWithRain
-  ) {
-    if (thunderTokens.some(token => token.startsWith("VC"))) {
-      weather.push("• Thunderstorm nearby");
-    } else {
-      weather.push("• Thunderstorm");
+    if (match[3] === "TS" && match[4] !== "TS") {
+      description =
+        `${vicinity}${intensity}thunderstorm with ${phenomenon}`;
     }
+
+    weather.push(`• ${description} (${token})`);
   }
 
-  const weatherDescriptions = [
-    ["FG", "• Fog"],
-    ["BR", "• Mist"],
-    ["HZ", "• Haze"],
-    ["FU", "• Smoke"],
-    ["DU", "• Dust"],
-    ["SA", "• Sand"],
-    ["VA", "• Volcanic ash"],
-    ["SQ", "• Squalls"],
-    ["FC", "• Funnel cloud or tornado"],
-    ["PO", "• Dust or sand whirls"],
-    ["DS", "• Duststorm"],
-    ["SS", "• Sandstorm"],
-    ["PL", "• Ice pellets"],
-    ["GR", "• Hail"],
-    ["GS", "• Small hail or snow pellets"],
-    ["IC", "• Ice crystals"]
-  ];
-
-  for (const [code, description] of weatherDescriptions) {
-    if (
-      weatherTokens.some(token =>
-        new RegExp(`${code}$`).test(token)
-      )
-    ) {
-      weather.push(description);
-    }
+  if (/\bNSW\b/.test(mainPart)) {
+    weather.push("• No significant weather (NSW)");
   }
-
-  const recent = mainTokens.find(
-    token => /^RE(?:RA|DZ|SN|TS)$/i.test(token)
-  );
-
-  if (recent === "RERA") weather.push("• Recent rain");
-  if (recent === "REDZ") weather.push("• Recent drizzle");
-  if (recent === "RESN") weather.push("• Recent snow");
-  if (recent === "RETS") weather.push("• Recent thunderstorm");
 
   if (weather.length) {
     out.weatherHtml = [...new Set(weather)].join("<br>");
@@ -1210,15 +1154,7 @@ function decodeMetar(metar) {
   // CLOUDS AND VERTICAL VISIBILITY
   // ----------------------------------------------------------
 
-  const clouds = [
-    ...mainPart.matchAll(
-      /\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g
-    )
-  ];
-
-  const verticalVisibility = [
-    ...mainPart.matchAll(/\bVV(\d{3}|\/{3})\b/g)
-  ];
+  const cloudLines = [];
 
   const cloudNames = {
     FEW: "Few",
@@ -1227,27 +1163,54 @@ function decodeMetar(metar) {
     OVC: "Overcast"
   };
 
-  const cloudLines = clouds.map(cloud =>
-    `• ${cloudNames[cloud[1]]} at ${Number(cloud[2]) * 100} ft` +
-    `${cloud[3] ? ` (${cloud[3]})` : ""}`
-  );
+  for (const match of mainPart.matchAll(
+    /\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g
+  )) {
+    const height = Number(match[2]) * 100;
 
-  verticalVisibility.forEach(group => {
+    const cloudType = match[3]
+      ? ` (${match[3] === "CB" ? "cumulonimbus" : "towering cumulus"}; ${match[3]})`
+      : "";
+
     cloudLines.push(
-      group[1] === "///"
-        ? "• Vertical visibility: height unavailable (VV///)"
-        : `• Vertical visibility at ${Number(group[1]) * 100} ft`
+      `• ${cloudNames[match[1]]} at ${height} ft${cloudType}`
     );
-  });
+  }
+
+  for (const match of mainPart.matchAll(
+    /\bVV(\d{3}|\/\/\/)\b/g
+  )) {
+    cloudLines.push(
+      match[1] === "///"
+        ? "• Vertical visibility unavailable (VV///)"
+        : `• Vertical visibility ${Number(match[1]) * 100} ft`
+    );
+  }
+
+  if (
+    !cloudLines.length &&
+    /\b(NCD|NSC|SKC|CLR)\b/.test(mainPart)
+  ) {
+    const token = mainPart.match(
+      /\b(NCD|NSC|SKC|CLR)\b/
+    )[1];
+
+    const descriptions = {
+      NCD: "No cloud detected by automated equipment",
+      NSC: "No significant cloud",
+      SKC: "Sky clear",
+      CLR: "Clear below 12,000 ft (US automated report)"
+    };
+
+    cloudLines.push(`• ${descriptions[token]} (${token})`);
+  }
 
   if (cloudLines.length) {
     out.cloudsHtml = cloudLines.join("<br>");
-  } else if (/\b(NCD|NSC|SKC|CLR)\b/.test(mainPart)) {
-    out.cloudsHtml = "• No clouds detected";
   }
 
   // ----------------------------------------------------------
-  // TEMPERATURE AND DEW POINT
+  // TEMPERATURE, DEW POINT AND TEMPERATURE EXTREMES
   // ----------------------------------------------------------
 
   const temperature = mainPart.match(
@@ -1255,12 +1218,17 @@ function decodeMetar(metar) {
   );
 
   if (temperature) {
-    out.temperature = temperature[2] === "///"
-      ? `${parseTemp(temperature[1])}°C, dew point not reported`
-      : `${parseTemp(temperature[1])}°C, dew point: ${parseTemp(temperature[2])}°C`;
+    const airC = parseTemp(temperature[1]);
+    const airF = celsiusToF(airC);
+
+    const dewText = temperature[2] === "///"
+      ? "dew point not reported"
+      : `dew point ${parseTemp(temperature[2])}°C (${celsiusToF(parseTemp(temperature[2]))}°F)`;
+
+    out.temperature =
+      `${airC}°C (${airF}°F); ${dewText}`;
   }
 
-  // Precise temperature and dew point: TsnTTTsnTTT.
   const precise = remarksPart.match(
     /\bT([01])(\d{3})([01])(\d{3})\b/
   );
@@ -1270,59 +1238,41 @@ function decodeMetar(metar) {
     const dew = parseSignedTenths(precise[3], precise[4]);
 
     out.preciseTemperature =
-      `${air.toFixed(1)}°C, dew point ${dew.toFixed(1)}°C`;
+      `${air.toFixed(1)}°C / ${dew.toFixed(1)}°C (${precise[0]})`;
   }
 
-  // Six-hour maximum and minimum temperatures.
-  const sixHourMax = remarksPart.match(
+  const maximum6 = remarksPart.match(
     /(?:^|\s)1([01])(\d{3})(?=\s|$)/
   );
 
-  const sixHourMin = remarksPart.match(
+  const minimum6 = remarksPart.match(
     /(?:^|\s)2([01])(\d{3})(?=\s|$)/
   );
 
-  if (sixHourMax || sixHourMin) {
-    const maximum = sixHourMax
-      ? `max ${parseSignedTenths(
-          sixHourMax[1],
-          sixHourMax[2]
-        ).toFixed(1)}°C`
-      : null;
-
-    const minimum = sixHourMin
-      ? `min ${parseSignedTenths(
-          sixHourMin[1],
-          sixHourMin[2]
-        ).toFixed(1)}°C`
-      : null;
-
-    out.sixHourTemps =
-      [maximum, minimum].filter(Boolean).join(", ");
+  if (maximum6 || minimum6) {
+    out.sixHourTemps = [
+      maximum6
+        ? `maximum ${parseSignedTenths(maximum6[1], maximum6[2]).toFixed(1)}°C`
+        : "",
+      minimum6
+        ? `minimum ${parseSignedTenths(minimum6[1], minimum6[2]).toFixed(1)}°C`
+        : ""
+    ].filter(Boolean).join("; ");
   }
 
-  // 24-hour maximum/minimum temperatures.
   const extremes = remarksPart.match(
     /\b4([01])(\d{3})([01])(\d{3})\b/
   );
 
   if (extremes) {
-    const maximum = parseSignedTenths(
-      extremes[1],
-      extremes[2]
-    );
-
-    const minimum = parseSignedTenths(
-      extremes[3],
-      extremes[4]
-    );
-
     out.extremeTemps =
-      `max ${maximum.toFixed(1)}°C, min ${minimum.toFixed(1)}°C`;
+      `maximum ${parseSignedTenths(extremes[1], extremes[2]).toFixed(1)}°C; ` +
+      `minimum ${parseSignedTenths(extremes[3], extremes[4]).toFixed(1)}°C ` +
+      `(${extremes[0]})`;
   }
 
   // ----------------------------------------------------------
-  // PRESSURE
+  // PRESSURE: QNH, US ALTIMETER, SLP AND PRESSURE TENDENCY
   // ----------------------------------------------------------
 
   const qnh = mainPart.match(/\bQ(\d{4})\b/);
@@ -1333,24 +1283,23 @@ function decodeMetar(metar) {
     const value = out.qnhValue;
 
     if (value < 980) {
-      out.qnhLabel = "Very low";
+      out.qnhLabel = "very low";
       out.qnhClass = "qnh-very-low";
     } else if (value < 1000) {
-      out.qnhLabel = "Low";
+      out.qnhLabel = "low";
       out.qnhClass = "qnh-low";
     } else if (value <= 1024) {
-      out.qnhLabel = "Normal";
+      out.qnhLabel = "normal";
       out.qnhClass = "qnh-normal";
     } else if (value <= 1039) {
-      out.qnhLabel = "High";
+      out.qnhLabel = "high";
       out.qnhClass = "qnh-high";
     } else {
-      out.qnhLabel = "Very high";
+      out.qnhLabel = "very high";
       out.qnhClass = "qnh-very-high";
     }
   }
 
-  // US altimeter setting in inches of mercury.
   const altimeter = mainPart.match(/\bA(\d{4})\b/);
 
   if (altimeter) {
@@ -1361,52 +1310,66 @@ function decodeMetar(metar) {
       `${hPa.toFixed(1)} hPa (${inHg.toFixed(2)} inHg)`;
   }
 
-  // Sea-level pressure in remarks: SLPddd.
   const slp = remarksPart.match(/\bSLP(\d{3})\b/);
 
   if (slp) {
     const digits = Number(slp[1]);
-
-    const hPa =
+    const pressure =
       (digits < 500 ? 1000 : 900) + digits / 10;
 
     out.seaLevelPressure =
-      `${hPa.toFixed(1)} hPa (${slp[0]})`;
+      `${pressure.toFixed(1)} hPa (${slp[0]})`;
+  }
+
+  const pressureTendency = remarksPart.match(
+    /\b5([0-8])(\d{3})\b/
+  );
+
+  if (pressureTendency) {
+    const tendencyNames = [
+      "increasing, then steady",
+      "increasing, then increasing more slowly",
+      "increasing steadily or unsteadily",
+      "decreasing, then increasing or steady",
+      "steady",
+      "decreasing, then decreasing more slowly",
+      "decreasing steadily or unsteadily",
+      "decreasing, then increasing more rapidly",
+      "increasing, then decreasing"
+    ];
+
+    const amount =
+      (Number(pressureTendency[2]) / 10).toFixed(1);
+
+    out.pressureTendency =
+      `${tendencyNames[Number(pressureTendency[1])]}; ` +
+      `${amount} hPa over 3 hours (${pressureTendency[0]})`;
   }
 
   // ----------------------------------------------------------
-  // RUNWAY VISUAL RANGE AND RUNWAY CONDITIONS
+  // RUNWAY VISUAL RANGE (RVR)
   // ----------------------------------------------------------
 
-  const decodedRunways = [];
+  const rvrLines = [];
 
-  // RVR groups, for example R27/1200, R27/M0600 or R27/0800V1200U.
-  const rvrGroups = [
-    ...mainPart.matchAll(
-      /\bR(\d{2}[LCR]?)\/(M|P)?(\d{4})(?:V(M|P)?(\d{4}))?([UDN])?(FT)?\b/g
-    )
-  ];
+  for (const match of mainPart.matchAll(
+    /\bR(\d{2}[LCR]?)\/(M|P)?(\d{4})(?:V(M|P)?(\d{4}))?([UDN])?(FT)?\b/g
+  )) {
+    const runway = formatRunwayLabel(match[1]);
+    const unit = match[7] ? "ft" : "m";
 
-  for (const match of rvrGroups) {
-    const runway = match[1];
-    const runwayLabel = formatRunwayLabel(runway);
-    const unit = match[7] ? " ft" : " m";
-
-    const formatRvr = (prefix, value) => {
+    const formatRange = (prefix, value) => {
       const qualifier =
-        prefix === "M"
-          ? "less than "
-          : prefix === "P"
-            ? "more than "
-            : "";
+        prefix === "M" ? "below " :
+        prefix === "P" ? "above " : "";
 
-      return `${qualifier}${Number(value)}${unit}`;
+      return `${qualifier}${Number(value)} ${unit}`;
     };
 
-    let range = formatRvr(match[2] || "", match[3]);
+    let range = formatRange(match[2] || "", match[3]);
 
     if (match[4] && match[5]) {
-      range += ` to ${formatRvr(match[4], match[5])}`;
+      range += ` to ${formatRange(match[4], match[5])}`;
     }
 
     const tendency = {
@@ -1415,75 +1378,71 @@ function decodeMetar(metar) {
       N: "no significant change"
     }[match[6]];
 
-    decodedRunways.push(
-      `• Runway ${runwayLabel}: visual range ${range}` +
-      `${tendency ? `; ${tendency}` : ""}`
+    rvrLines.push(
+      `• Runway ${runway}: ${range}` +
+      `${tendency ? `; tendency ${tendency}` : ""} (${match[0]})`
     );
   }
 
-  // Runway deposits and braking-action groups.
-  const runwayGroups = [
-    ...mainPart.matchAll(
-      /\bR(\d{2}[LCR]?)\/(CLRD[A-Z0-9/]*|SNOCLO|[0-9/]{6})\b/g
-    )
-  ];
+  if (rvrLines.length) {
+    out.rvrHtml = rvrLines.join("<br>");
+  }
 
-  for (const match of runwayGroups) {
-    const runway = match[1];
+  // ----------------------------------------------------------
+  // RUNWAY CONDITION GROUPS
+  // ----------------------------------------------------------
+
+  const runwayLines = [];
+
+  const depositNames = {
+    "0": "clear and dry",
+    "1": "damp",
+    "2": "wet or water patches",
+    "3": "rime or frost",
+    "4": "dry snow",
+    "5": "wet snow",
+    "6": "slush",
+    "7": "ice",
+    "8": "compacted snow",
+    "9": "frozen ruts or ridges",
+    "/": "not reported"
+  };
+
+  const extentNames = {
+    "1": "less than 10%",
+    "2": "11–25%",
+    "3": "26–50%",
+    "4": "51–100%",
+    "/": "not reported"
+  };
+
+  const brakingNames = {
+    "91": "poor",
+    "92": "medium to poor",
+    "93": "medium",
+    "94": "medium to good",
+    "95": "good",
+    "99": "unreliable",
+    "//": "not reported"
+  };
+
+  for (const match of mainPart.matchAll(
+    /\bR(\d{2}[LCR]?)\/(CLRD[A-Z0-9/]*|SNOCLO|[0-9/]{6})\b/g
+  )) {
+    const runway = formatRunwayLabel(match[1]);
     const code = match[2];
-    const runwayLabel = formatRunwayLabel(runway);
 
     if (code.startsWith("CLRD")) {
-      const brakingCode = code.slice(4);
-      let braking = "braking action not reported";
-
-      const brakingNames = {
-        "91": "poor braking action",
-        "92": "medium to poor braking action",
-        "93": "medium braking action",
-        "94": "medium to good braking action",
-        "95": "good braking action",
-        "99": "braking-action figures unreliable"
-      };
-
-      if (/^\d{2}$/.test(brakingCode)) {
-        braking =
-          brakingNames[brakingCode] ||
-          `braking-action code ${brakingCode}`;
-      }
-
-      decodedRunways.push(
-        `• Runway ${runwayLabel}: cleared of runway deposits; ${braking}`
+      runwayLines.push(
+        `• Runway ${runway}: cleared of runway deposits (${code})`
       );
 
     } else if (code === "SNOCLO") {
-      decodedRunways.push(
-        `• Runway ${runwayLabel}: closed due to snow (SNOCLO)`
+      runwayLines.push(
+        `• Runway ${runway}: closed due to snow (SNOCLO)`
       );
 
     } else if (/^[0-9/]{6}$/.test(code)) {
-      const depositNames = {
-        "0": "clear and dry",
-        "1": "damp",
-        "2": "wet or water patches",
-        "3": "rime or frost",
-        "4": "dry snow",
-        "5": "wet snow",
-        "6": "slush",
-        "7": "ice",
-        "8": "compacted or rolled snow",
-        "9": "frozen ruts or ridges",
-        "/": "not reported"
-      };
-
-      const extentNames = {
-        "1": "less than 10%",
-        "2": "11–25%",
-        "3": "26–50%",
-        "4": "51–100%",
-        "/": "not reported"
-      };
-
       const deposit =
         depositNames[code[0]] || `deposit code ${code[0]}`;
 
@@ -1495,7 +1454,7 @@ function decodeMetar(metar) {
       let depth;
 
       if (depthCode === "//") {
-        depth = "depth not reported";
+        depth = "not reported";
       } else if (depthCode === "00") {
         depth = "less than 1 mm";
       } else if (
@@ -1509,46 +1468,130 @@ function decodeMetar(metar) {
 
       const brakingCode = code.slice(4, 6);
 
-      const brakingNames = {
-        "91": "poor",
-        "92": "medium to poor",
-        "93": "medium",
-        "94": "medium to good",
-        "95": "good",
-        "99": "unreliable figures",
-        "//": "not reported"
-      };
-
       const braking =
         brakingNames[brakingCode] ||
-        (/^\d{2}$/.test(brakingCode) &&
-        Number(brakingCode) <= 90
-          ? `friction coefficient ${(Number(brakingCode) / 100).toFixed(2)}`
-          : `code ${brakingCode}`);
+        (
+          /^\d{2}$/.test(brakingCode) &&
+          Number(brakingCode) <= 90
+            ? `friction coefficient ${(Number(brakingCode) / 100).toFixed(2)}`
+            : `braking code ${brakingCode}`
+        );
 
-      decodedRunways.push(
-        `• Runway ${runwayLabel}: ${deposit}; contamination ${extent}; ` +
-        `deposit depth ${depth}; braking ${braking}`
+      runwayLines.push(
+        `• Runway ${runway}: ${deposit}; extent ${extent}; ` +
+        `deposit depth ${depth}; braking ${braking} (${code})`
       );
     }
   }
 
-  if (decodedRunways.length) {
-    out.runwayStatus = [...new Set(decodedRunways)].join("<br>");
+  if (runwayLines.length) {
+    out.runwayStatus = [...new Set(runwayLines)].join("<br>");
   }
 
   // ----------------------------------------------------------
-  // TREND
+  // REMARKS: PRECIPITATION, PEAK WIND AND WIND SHIFT
   // ----------------------------------------------------------
 
-  if (/\bNOSIG\b/.test(mainPart)) {
-    out.trend =
-      "No significant change expected during the trend period (NOSIG)";
+  const precipitation = remarksPart.match(/\bP(\d{4})\b/);
+
+  if (precipitation) {
+    const hundredths = Number(precipitation[1]);
+
+    out.precipitation =
+      `${(hundredths / 100).toFixed(2)} inches ` +
+      `(${(hundredths * 0.254).toFixed(2)} mm) ` +
+      `in the reported precipitation period (${precipitation[0]})`;
+  }
+
+  const sixHourPrecip = remarksPart.match(/\b6(\d{4})\b/);
+  const twentyFourHourPrecip = remarksPart.match(/\b7(\d{4})\b/);
+
+  const precipitationExtras = [];
+
+  if (sixHourPrecip) {
+    const amount = Number(sixHourPrecip[1]);
+
+    precipitationExtras.push(
+      `${(amount / 100).toFixed(2)} in / ` +
+      `${(amount * 0.254).toFixed(2)} mm in 6 hours`
+    );
+  }
+
+  if (twentyFourHourPrecip) {
+    const amount = Number(twentyFourHourPrecip[1]);
+
+    precipitationExtras.push(
+      `${(amount / 100).toFixed(2)} in / ` +
+      `${(amount * 0.254).toFixed(2)} mm in 24 hours`
+    );
+  }
+
+  if (precipitationExtras.length) {
+    out.precipitation = [
+      out.precipitation,
+      ...precipitationExtras
+    ].filter(Boolean).join("; ");
+  }
+
+  const peakWind = remarksPart.match(
+    /\bPK WND (\d{3})(\d{2,3})\/(\d{4})\b/
+  );
+
+  if (peakWind) {
+    const direction = Number(peakWind[1]);
+    const speed = Number(peakWind[2]);
+
+    out.peakWind =
+      `${direction}° (${degToCompass(direction)}) at ${speed} kt ` +
+      `(${Math.round(speed * 1.852)} km/h), ` +
+      `time ${peakWind[3].slice(0, 2)}:${peakWind[3].slice(2)} UTC`;
+  }
+
+  const windShift = remarksPart.match(
+    /\bWSHFT\s*(\d{4})?(?:\s*(FROPA))?/
+  );
+
+  if (windShift) {
+    out.windShift =
+      `Wind shift` +
+      `${windShift[1]
+        ? ` at ${windShift[1].slice(0, 2)}:${windShift[1].slice(2)} UTC`
+        : ""}` +
+      `${windShift[2] ? "; frontal passage indicated" : ""}`;
   }
 
   // ----------------------------------------------------------
-  // STATION TYPE AND MAINTENANCE
+  // LIGHTNING AND HAIL
   // ----------------------------------------------------------
+
+  const lightning = remarksPart.match(
+    /\b(?:LTG|CG|IC|CC|CA|TS)\b.*?(?=\s(?:AO[12]|SLP\d{3}|T[01]\d{3}[01]\d{3}|\$)|$)/
+  );
+
+  if (lightning && /\bLTG\b/.test(remarksPart)) {
+    out.lightning = `Lightning reported: ${lightning[0]}`;
+  }
+
+  const hail = remarksPart.match(/\bGR\s?(\d+(?:\.\d+)?)\b/);
+
+  if (hail) {
+    out.hailSize =
+      `${hail[1]} inch (${(Number(hail[1]) * 25.4).toFixed(1)} mm) hailstones`;
+  }
+
+  // ----------------------------------------------------------
+  // STATION TYPE, MAINTENANCE AND RECENT WEATHER
+  // ----------------------------------------------------------
+
+  const recent = remarkTokens.filter(token =>
+    /^RE(?:TS|RA|DZ|SN|FG|FZRA|SHRA|BLSN|GS|GR)$/.test(token)
+  );
+
+  if (recent.length) {
+    out.recentWeather = recent
+      .map(token => `• ${token} = recent ${token.slice(2).toLowerCase()}`)
+      .join("; ");
+  }
 
   const stationType = remarksPart.match(/\bAO([12])\b/);
 
@@ -1559,11 +1602,31 @@ function decodeMetar(metar) {
   }
 
   if (/(?:^|\s)\$(?:\s|$)/.test(remarksPart)) {
-    out.maintenance = "Maintenance indicator: $";
+    out.maintenance =
+      "Maintenance indicator: $ (automated station maintenance check)";
   }
 
   // ----------------------------------------------------------
-  // MT KAUKAU WIND
+  // TREND GROUPS
+  // ----------------------------------------------------------
+
+  const trendTokens = mainTokens.filter(token =>
+    /^(NOSIG|BECMG|TEMPO|PROB\d{2}|FM\d{4}|TL\d{4}|AT\d{4})$/.test(token)
+  );
+
+  if (trendTokens.length) {
+    const trendDescriptions = trendTokens.map(token => ({
+      NOSIG: "no significant change expected",
+      BECMG: "conditions becoming",
+      TEMPO: "temporary fluctuations expected"
+    }[token] || token));
+
+    out.trend =
+      `${trendDescriptions.join("; ")} (${trendTokens.join(" ")})`;
+  }
+
+  // ----------------------------------------------------------
+  // MT KAUKAU AND SUGARLOAF WINDS
   // ----------------------------------------------------------
 
   const kau = metar.match(
@@ -1575,25 +1638,14 @@ function decodeMetar(metar) {
     const speed = Number(kau[2]);
     const gust = kau[3] ? Number(kau[3]) : null;
 
-    const speedKmh = Math.round(speed * 1.852);
-    const gustKmh =
-      gust !== null ? Math.round(gust * 1.852) : null;
-
-    const windClass = classifyWind(gust ?? speed);
-
     out.kaukau =
-      `<span class="${windClass}">` +
-      `${direction}° (${degToCompass(direction)}) at ` +
-      `${speed} knots (${speedKmh} km/h)` +
+      `<span class="${classifyWind(gust ?? speed)}">` +
+      `${direction}° (${degToCompass(direction)}) at ${speed} kt ` +
+      `(${Math.round(speed * 1.852)} km/h)` +
       `${gust !== null
-        ? `, gusting ${gust} knots (${gustKmh} km/h)`
-        : ""}` +
-      `</span>`;
+        ? `, gusting ${gust} kt (${Math.round(gust * 1.852)} km/h)`
+        : ""}</span>`;
   }
-
-  // ----------------------------------------------------------
-  // SUGARLOAF WIND
-  // ----------------------------------------------------------
 
   const sugarloaf = metar.match(
     /\bSUGARLOAF\s+(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/i
@@ -1602,31 +1654,22 @@ function decodeMetar(metar) {
   if (sugarloaf) {
     const direction = Number(sugarloaf[1]);
     const speed = Number(sugarloaf[2]);
-    const gust = sugarloaf[3]
-      ? Number(sugarloaf[3])
-      : null;
-
-    const speedKmh = Math.round(speed * 1.852);
-    const gustKmh =
-      gust !== null ? Math.round(gust * 1.852) : null;
-
-    const windClass = classifyWind(gust ?? speed);
+    const gust = sugarloaf[3] ? Number(sugarloaf[3]) : null;
 
     out.sugarloaf =
-      `<span class="${windClass}">` +
-      `${direction}° (${degToCompass(direction)}) at ` +
-      `${speed} knots (${speedKmh} km/h)` +
+      `<span class="${classifyWind(gust ?? speed)}">` +
+      `${direction}° (${degToCompass(direction)}) at ${speed} kt ` +
+      `(${Math.round(speed * 1.852)} km/h)` +
       `${gust !== null
-        ? `, gusting ${gust} knots (${gustKmh} km/h)`
-        : ""}` +
-      `</span>`;
+        ? `, gusting ${gust} kt (${Math.round(gust * 1.852)} km/h)`
+        : ""}</span>`;
   }
 
   return out;
 }
 
 // ============================================================
-// HELPERS
+// DECODER HELPERS
 // ============================================================
 
 function formatRunwayLabel(runway) {
@@ -1645,8 +1688,12 @@ function classifyWind(speedKnots) {
 
 function parseTemp(value) {
   return value.startsWith("M")
-    ? -Number(value.slice(1))
+    ? -parseInt(value.slice(1), 10)
     : Number(value);
+}
+
+function celsiusToF(celsius) {
+  return Math.round((Number(celsius) * 9 / 5 + 32) * 10) / 10;
 }
 
 function parseUsFraction(value) {
@@ -1662,20 +1709,14 @@ function parseUsFraction(value) {
 
 function parseSignedTenths(sign, digits) {
   const value = Number(digits) / 10;
-
-  // METAR temperature groups use 1 to indicate a negative value.
   return sign === "1" ? -value : value;
 }
 
 function degToCompass(degrees) {
-  const directions = [
+  return [
     "N", "NE", "E", "SE",
     "S", "SW", "W", "NW"
-  ];
-
-  return directions[
-    Math.round(degrees / 45) % 8
-  ];
+  ][Math.round(degrees / 45) % 8];
 }
 
 // ============================================================
@@ -1698,7 +1739,6 @@ function parseMetarTime(group) {
 
   const difference = candidate.getTime() - now.getTime();
 
-  // METAR timestamps can fall in the previous or next month.
   if (difference > 15 * 24 * 60 * 60 * 1000) {
     candidate = new Date(
       Date.UTC(year, month - 1, day, hour, minute)
@@ -1713,7 +1753,7 @@ function parseMetarTime(group) {
 }
 
 // ============================================================
-// NEW ZEALAND TIME FORMATTING
+// NEW ZEALAND LOCAL TIME
 // ============================================================
 
 function formatNZTime(date) {
