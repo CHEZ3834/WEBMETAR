@@ -1,1063 +1,965 @@
-
-"use strict";
-
-const $ = id => document.getElementById(id);
-const RAW = $("rawMetar");
-const DEC = $("decodedContent");
-const ISSUED = $("issuedTime");
-const UPDATED = $("lastUpdated");
-const SOURCE = $("sourceInfo");
-const REFRESH = $("refreshBtn");
+const RAW = document.getElementById("rawMetar");
+const DEC = document.getElementById("decodedContent");
+const ISSUED = document.getElementById("issuedTime");
+const UPDATED = document.getElementById("lastUpdated");
+const SOURCE = document.getElementById("sourceInfo");
+const REF = document.getElementById("refreshBtn");
 const TITLE = document.querySelector(".title");
-const TAB_TRACK = $("tabTrack");
-const PREV = $("prevAirports");
-const NEXT = $("nextAirports");
-const SEARCH = $("airportSearch");
-const RESULTS = $("airportSearchResults");
+const TABS = [...document.querySelectorAll(".tab[data-airport]")];
+const PREV = document.getElementById("prevAirports");
+const NEXT = document.getElementById("nextAirports");
 
-const AIRPORTS = [
-  "NZWN (WLG)", "NZAA (AKL)", "NZCH (CHC)", "NZQN (ZQN)",
-  "YBBN (BNE)", "EGLL (LHR)", "RJTT (HND)", "KATL (ATL)", "OMDB (DXB)"
-];
+const SEARCH = document.getElementById("airportSearch");
+const SEARCH_RESULTS = document.getElementById("airportSearchResults");
 
-const PAGE_SIZE = 3;
-const AIRPORT_CSV =
+const AIRPORTS = ["NZWN", "NZAA", "NZCH"];
+const AIRPORTS_CSV =
   "https://davidmegginson.github.io/ourairports-data/airports.csv";
-const CACHE_KEY = "webmetarAirportDatabaseV1";
 
-let currentAirport = AIRPORTS[0];
-let pageStart = 0;
-let requestId = 0;
-let airportDb = null;
-let airportLoad = null;
-let searchMatches = [];
-let selectedSearchIndex = 0;
+let currentAirport = "NZWN";
+let tabStart = 0;
+let requestNumber = 0;
+let searchNumber = 0;
+let airportDatabase = null;
+let airportDatabasePromise = null;
 
-REFRESH.addEventListener("click", fetchAndRender);
-PREV.addEventListener("click", () => moveAirportPage(-1));
-NEXT.addEventListener("click", () => moveAirportPage(1));
-SEARCH.addEventListener("input", renderSearch);
-SEARCH.addEventListener("keydown", searchKeydown);
+const LOADING_DELAY_MS = 1100;
+const AIRPORT_CACHE_KEY = "webmetar_airport_database_v1";
+const AIRPORT_CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
+/* Preset airport controls */
+
+TABS.forEach(tab => {
+  tab.addEventListener("click", () => {
+    switchAirport(tab.dataset.airport);
+  });
+});
+
+PREV.addEventListener("click", () => moveTabWindow(-1));
+NEXT.addEventListener("click", () => moveTabWindow(1));
+REF.addEventListener("click", fetchAndRender);
+
+/* Airport search */
+
+SEARCH.addEventListener("input", () => {
+  searchAirports(SEARCH.value);
+});
+
+SEARCH.addEventListener("focus", () => {
+  if (SEARCH.value.trim().length >= 2) {
+    searchAirports(SEARCH.value);
+  }
+});
 
 document.addEventListener("click", event => {
-  if (!event.target.closest(".airport-search")) closeSearch();
+  if (
+    !SEARCH.contains(event.target) &&
+    !SEARCH_RESULTS.contains(event.target)
+  ) {
+    hideSearchResults();
+  }
+});
+
+SEARCH.addEventListener("keydown", event => {
+  if (event.key === "Escape") {
+    hideSearchResults();
+    SEARCH.blur();
+  }
+
+  if (event.key === "Enter") {
+    const firstResult = SEARCH_RESULTS.querySelector(".search-result");
+
+    if (firstResult && !SEARCH_RESULTS.hidden) {
+      event.preventDefault();
+      firstResult.click();
+    }
+  }
 });
 
 renderTabs();
-updateTitle();
 fetchAndRender();
 
-function icaoOf(label) {
-  return label.split("(")[0].trim().toUpperCase();
-}
+/* Preset tabs */
 
-function updateTitle() {
-  TITLE.textContent = `✈️ ${currentAirport} METAR`;
-}
+function moveTabWindow(direction) {
+  const maxStart = Math.max(0, AIRPORTS.length - 2);
 
-function moveAirportPage(direction) {
-  pageStart = Math.max(
+  tabStart = Math.max(
     0,
-    Math.min(AIRPORTS.length - PAGE_SIZE, pageStart + direction)
+    Math.min(maxStart, tabStart + direction)
   );
+
   renderTabs();
 }
 
 function renderTabs() {
-  TAB_TRACK.innerHTML = "";
+  TABS.forEach(tab => {
+    const airport = tab.dataset.airport;
 
-  AIRPORTS.slice(pageStart, pageStart + PAGE_SIZE).forEach(label => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "tab" +
-      (label === currentAirport ? " active" : "");
-    button.textContent = label;
-    button.setAttribute("aria-pressed", String(label === currentAirport));
-    button.addEventListener("click", () => switchAirport(label));
-    TAB_TRACK.appendChild(button);
+    tab.hidden = !AIRPORTS
+      .slice(tabStart, tabStart + 2)
+      .includes(airport);
+
+    tab.classList.toggle("active", airport === currentAirport);
+
+    tab.setAttribute(
+      "aria-pressed",
+      String(airport === currentAirport)
+    );
   });
 
-  PREV.disabled = pageStart === 0;
-  NEXT.disabled = pageStart >= AIRPORTS.length - PAGE_SIZE;
+  PREV.disabled = tabStart === 0;
+  NEXT.disabled = tabStart >= AIRPORTS.length - 2;
 }
 
-function switchAirport(label) {
-  if (!label) return;
+function switchAirport(icao) {
+  if (!AIRPORTS.includes(icao)) return;
 
-  currentAirport = label;
+  selectAirport(icao);
+}
 
-  const presetIndex = AIRPORTS.indexOf(label);
+function selectAirport(icao) {
+  icao = String(icao || "").trim().toUpperCase();
+
+  if (!/^[A-Z0-9]{4}$/.test(icao)) return;
+
+  currentAirport = icao;
+
+  const presetIndex = AIRPORTS.indexOf(icao);
+
   if (presetIndex >= 0) {
-    pageStart = Math.min(presetIndex, AIRPORTS.length - PAGE_SIZE);
+    if (presetIndex < tabStart) {
+      tabStart = presetIndex;
+    } else if (presetIndex > tabStart + 1) {
+      tabStart = presetIndex - 1;
+    }
   }
 
   renderTabs();
-  updateTitle();
-  closeSearch();
+
+  TITLE.textContent = `✈️ ${icao} METAR`;
+
+  hideSearchResults();
+
   fetchAndRender();
 }
 
-function closeSearch() {
-  RESULTS.hidden = true;
-  RESULTS.innerHTML = "";
-  SEARCH.setAttribute("aria-expanded", "false");
-  searchMatches = [];
-  selectedSearchIndex = 0;
-}
+/* Fetch the selected airport's METAR */
 
-function normalize(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
+async function fetchAndRender() {
+  const thisRequest = ++requestNumber;
+  const airport = currentAirport;
 
-function parseCsvLine(line) {
-  const result = [];
-  let value = "";
-  let quoted = false;
+  RAW.textContent = "Loading…";
+  DEC.innerHTML = "";
+  ISSUED.textContent = "";
+  UPDATED.textContent = "";
+  SOURCE.textContent = "";
 
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
+  await new Promise(resolve => {
+    setTimeout(resolve, LOADING_DELAY_MS);
+  });
 
-    if (ch === '"') {
-      if (quoted && line[i + 1] === '"') {
-        value += '"';
-        i++;
-      } else {
-        quoted = !quoted;
-      }
-    } else if (ch === "," && !quoted) {
-      result.push(value);
-      value = "";
-    } else {
-      value += ch;
+  if (thisRequest !== requestNumber) return;
+
+  try {
+    const url = `https://metar.vatsim.net/${airport.toLowerCase()}`;
+
+    const resp = await fetch(url, {
+      cache: "no-store"
+    });
+
+    if (!resp.ok) {
+      throw new Error(`METAR request failed: HTTP ${resp.status}`);
     }
-  }
 
-  result.push(value);
-  return result;
+    const metarText = (await resp.text()).trim();
+
+    if (thisRequest !== requestNumber) return;
+
+    if (!metarText) {
+      throw new Error("The METAR source returned an empty report.");
+    }
+
+    RAW.textContent = metarText;
+
+    const isAuto = /\bAUTO\b/.test(metarText);
+
+    SOURCE.textContent =
+      `Data from metar.vatsim.net/${airport.toLowerCase()} • ` +
+      `${isAuto ? "AUTO" : "MANUAL"}`;
+
+    DEC.innerHTML = buildDecodedHtml(decodeMetar(metarText));
+
+    const issueMatch = metarText.match(/\b(\d{6}Z)\b/);
+
+    if (issueMatch) {
+      ISSUED.innerHTML =
+        `<span class="footer-label">METAR issued:</span><br>` +
+        escapeHtml(formatNZTime(parseMetarTime(issueMatch[1])));
+    }
+
+    UPDATED.innerHTML =
+      `<span class="footer-label">Last updated:</span><br>` +
+      escapeHtml(formatNZTime(new Date()));
+  } catch (error) {
+    if (thisRequest !== requestNumber) return;
+
+    RAW.textContent = "Failed to fetch METAR.";
+
+    DEC.textContent =
+      error instanceof TypeError
+        ? "The request could not reach the METAR server. Check your internet connection. If this persists, the server may be blocking browser requests."
+        : error.message || String(error);
+
+    console.error("METAR fetch error:", error);
+  }
 }
 
-async function loadAirportDb() {
-  if (airportDb) return airportDb;
-  if (airportLoad) return airportLoad;
+/* Worldwide airport database */
 
-  airportLoad = (async () => {
+async function loadAirportDatabase() {
+  if (airportDatabase) return airportDatabase;
+
+  if (airportDatabasePromise) return airportDatabasePromise;
+
+  airportDatabasePromise = (async () => {
+    /* Use a recent local cache if one exists. */
+
     try {
-      const saved = localStorage.getItem(CACHE_KEY);
+      const cached = localStorage.getItem(AIRPORT_CACHE_KEY);
 
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      if (cached) {
+        const saved = JSON.parse(cached);
 
-        if (Array.isArray(parsed) && parsed.length > 100) {
-          airportDb = parsed;
-          return parsed;
+        if (
+          saved &&
+          Array.isArray(saved.airports) &&
+          Date.now() - saved.savedAt < AIRPORT_CACHE_MAX_AGE
+        ) {
+          airportDatabase = saved.airports;
+          return airportDatabase;
         }
       }
-    } catch (_) {
-      // Continue to download a fresh list if the cache is unavailable.
+    } catch (error) {
+      /* Continue to the network if local storage is unavailable. */
     }
 
-    const response = await fetch(AIRPORT_CSV, {
+    const response = await fetch(AIRPORTS_CSV, {
       cache: "force-cache"
     });
 
     if (!response.ok) {
-      throw new Error(`Airport list returned HTTP ${response.status}`);
+      throw new Error(
+        `Airport database request failed: HTTP ${response.status}`
+      );
     }
 
-    const lines = (await response.text()).split(/\r?\n/);
-    const headers = parseCsvLine(lines.shift() || "");
-    const col = name => headers.indexOf(name);
+    const csvText = await response.text();
+    const lines = csvText.split(/\r?\n/);
 
-    const ix = {
-      type: col("type"),
-      name: col("name"),
-      city: col("municipality"),
-      country: col("iso_country"),
-      scheduled: col("scheduled_service"),
-      icao: col("icao_code"),
-      iata: col("iata_code"),
-      keywords: col("keywords")
-    };
-
-    if (ix.type < 0 || ix.icao < 0 || ix.name < 0) {
-      throw new Error("Airport list format was not recognised");
+    if (lines.length < 2) {
+      throw new Error("The airport database was empty.");
     }
 
-    const list = [];
+    const headers = parseCSVLine(lines[0]).map(header =>
+      header.trim().toLowerCase()
+    );
 
-    for (const line of lines) {
-      if (!line) continue;
+    const column = name => headers.indexOf(name);
 
-      const row = parseCsvLine(line);
-      const type = (row[ix.type] || "").toLowerCase();
-      const icao = (row[ix.icao] || "").trim().toUpperCase();
+    const identColumn = column("ident");
+    const typeColumn = column("type");
+    const nameColumn = column("name");
+    const municipalityColumn = column("municipality");
+    const countryColumn = column("iso_country");
+    const iataColumn = column("iata_code");
+    const closedColumn = column("closed");
+
+    if (identColumn < 0 || nameColumn < 0) {
+      throw new Error("The airport database format was not recognised.");
+    }
+
+    const airports = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (!line.trim()) continue;
+
+      const fields = parseCSVLine(line);
+
+      const ident = (fields[identColumn] || "").trim().toUpperCase();
+      const name = (fields[nameColumn] || "").trim();
+      const type = (fields[typeColumn] || "").trim().toLowerCase();
+      const closed = (fields[closedColumn] || "").trim().toLowerCase();
+
+      /*
+       * METAR requests use ICAO-style four-character identifiers.
+       * Exclude closed locations and non-airport facilities.
+       */
+
+      if (!/^[A-Z0-9]{4}$/.test(ident)) continue;
+      if (!name || closed === "yes" || type === "closed") continue;
 
       if (
-        !icao ||
-        !["large_airport", "medium_airport"].includes(type) ||
-        (row[ix.scheduled] || "").toLowerCase() !== "yes"
+        type !== "large_airport" &&
+        type !== "medium_airport" &&
+        type !== "small_airport"
       ) {
         continue;
       }
 
-      list.push({
-        icao,
-        iata: (row[ix.iata] || "").trim().toUpperCase(),
-        name: (row[ix.name] || "").trim(),
-        city: (row[ix.city] || "").trim(),
-        country: (row[ix.country] || "").trim().toUpperCase(),
-        keywords: (row[ix.keywords] || "").trim().slice(0, 180),
-        size: type === "large_airport" ? 2 : 1
+      airports.push({
+        ident,
+        name,
+        municipality: (
+          fields[municipalityColumn] || ""
+        ).trim(),
+        country: (
+          fields[countryColumn] || ""
+        ).trim(),
+        iata: (
+          fields[iataColumn] || ""
+        ).trim().toUpperCase()
       });
     }
 
-    if (!list.length) {
-      throw new Error("No airports were found");
+    if (!airports.length) {
+      throw new Error("No airports were found in the database.");
     }
 
-    airportDb = list;
+    airportDatabase = airports;
 
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(list));
-    } catch (_) {
-      // Storage is optional; the list remains available in memory.
+      localStorage.setItem(
+        AIRPORT_CACHE_KEY,
+        JSON.stringify({
+          savedAt: Date.now(),
+          airports
+        })
+      );
+    } catch (error) {
+      /* Search still works if caching is unavailable. */
     }
 
-    return list;
+    return airportDatabase;
   })();
 
   try {
-    return await airportLoad;
-  } catch (error) {
-    airportLoad = null;
-    throw error;
+    return await airportDatabasePromise;
+  } finally {
+    airportDatabasePromise = null;
   }
 }
 
-function fallbackAirports() {
-  return AIRPORTS.map(label => {
-    const icao = icaoOf(label);
-    const match = label.match(/\(([^)]+)\)/);
-    const iata = match ? match[1] : "";
+/*
+ * Parse a CSV row while respecting quoted fields and commas
+ * inside airport names.
+ */
 
-    const details = {
-      NZWN: ["Wellington International Airport", "Wellington", "NZ"],
-      NZAA: ["Auckland Airport", "Auckland", "NZ"],
-      NZCH: ["Christchurch International Airport", "Christchurch", "NZ"],
-      NZQN: ["Queenstown Airport", "Queenstown", "NZ"],
-      YBBN: ["Brisbane Airport", "Brisbane", "AU"],
-      EGLL: ["London Heathrow Airport", "London", "GB"],
-      RJTT: ["Tokyo Haneda Airport", "Tokyo", "JP"],
-      KATL: ["Hartsfield-Jackson Atlanta International Airport", "Atlanta", "US"],
-      OMDB: ["Dubai International Airport", "Dubai", "AE"]
-    }[icao] || [label, "", ""];
+function parseCSVLine(line) {
+  const fields = [];
+  let field = "";
+  let insideQuotes = false;
 
-    return {
-      icao,
-      iata,
-      name: details[0],
-      city: details[1],
-      country: details[2],
-      keywords: "",
-      size: 1
-    };
-  });
-}
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
 
-function findAirports(query) {
-  const q = normalize(query);
-  if (!q) return [];
-
-  const list = airportDb || fallbackAirports();
-
-  return list
-    .map(airport => {
-      const icao = normalize(airport.icao);
-      const iata = normalize(airport.iata);
-      const name = normalize(airport.name);
-      const city = normalize(airport.city);
-      const keywords = normalize(airport.keywords);
-
-      let score = 0;
-
-      if (icao === q || (iata && iata === q)) score = 1200;
-      else if (name === q) score = 1100;
-      else if (city === q) score = 1000;
-      else if (icao.startsWith(q) || (iata && iata.startsWith(q))) score = 900;
-      else if (name.startsWith(q)) score = 850;
-      else if (city.startsWith(q)) score = 800;
-      else if (name.includes(q)) score = 650;
-      else if (city.includes(q)) score = 600;
-      else if (keywords.includes(q)) score = 500;
-
-      return { ...airport, score };
-    })
-    .filter(airport => airport.score > 0)
-    .sort((a, b) =>
-      b.score - a.score ||
-      b.size - a.size ||
-      a.name.localeCompare(b.name)
-    )
-    .filter((airport, index, all) =>
-      all.findIndex(item => item.icao === airport.icao) === index
-    )
-    .slice(0, 8);
-}
-
-function airportLabel(airport) {
-  return airport.iata
-    ? `${airport.icao} (${airport.iata})`
-    : airport.icao;
-}
-
-function countryName(code) {
-  try {
-    return code
-      ? new Intl.DisplayNames(["en"], { type: "region" }).of(code)
-      : "";
-  } catch (_) {
-    return code || "";
+    if (char === '"') {
+      if (insideQuotes && line[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+    } else if (char === "," && !insideQuotes) {
+      fields.push(field);
+      field = "";
+    } else {
+      field += char;
+    }
   }
+
+  fields.push(field);
+
+  return fields;
 }
 
-async function renderSearch() {
-  const query = SEARCH.value.trim();
+/* Search and rank airport matches */
 
-  if (!query) {
-    closeSearch();
+async function searchAirports(rawQuery) {
+  const query = String(rawQuery || "").trim().toLowerCase();
+  const thisSearch = ++searchNumber;
+
+  if (query.length < 2) {
+    hideSearchResults();
     return;
   }
 
-  RESULTS.hidden = false;
-  RESULTS.innerHTML =
-    '<p class="search-message">Searching airports…</p>';
-  SEARCH.setAttribute("aria-expanded", "true");
+  showSearchMessage("Searching airports…");
 
   try {
-    await loadAirportDb();
+    const airports = await loadAirportDatabase();
+
+    if (thisSearch !== searchNumber) return;
+
+    const terms = query.split(/\s+/).filter(Boolean);
+
+    const matches = airports
+      .map(airport => {
+        const ident = airport.ident.toLowerCase();
+        const iata = airport.iata.toLowerCase();
+        const name = airport.name.toLowerCase();
+        const city = airport.municipality.toLowerCase();
+        const country = airport.country.toLowerCase();
+
+        const searchable =
+          `${ident} ${iata} ${name} ${city} ${country}`;
+
+        if (!terms.every(term => searchable.includes(term))) {
+          return null;
+        }
+
+        let score = 0;
+
+        if (ident === query) score += 1000;
+        if (iata && iata === query) score += 950;
+        if (ident.startsWith(query)) score += 500;
+        if (iata && iata.startsWith(query)) score += 450;
+        if (name.startsWith(query)) score += 250;
+        if (city.startsWith(query)) score += 200;
+        if (name.includes(query)) score += 100;
+        if (city.includes(query)) score += 80;
+
+        return {
+          airport,
+          score
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        return b.score - a.score ||
+          a.airport.ident.localeCompare(b.airport.ident);
+      })
+      .slice(0, 8)
+      .map(result => result.airport);
+
+    if (thisSearch !== searchNumber) return;
+
+    renderSearchResults(matches);
   } catch (error) {
-    console.warn("Airport search list could not load:", error);
-  }
+    if (thisSearch !== searchNumber) return;
 
-  if (!SEARCH.value.trim()) {
-    closeSearch();
+    console.error("Airport search error:", error);
+
+    showSearchMessage(
+      "Airport search could not load. Check your connection and try again."
+    );
+  }
+}
+
+function renderSearchResults(airports) {
+  SEARCH_RESULTS.replaceChildren();
+
+  if (!airports.length) {
+    showSearchMessage("No matching airports found.");
     return;
   }
 
-  searchMatches = findAirports(SEARCH.value);
-  selectedSearchIndex = 0;
-  RESULTS.innerHTML = "";
-
-  if (!searchMatches.length) {
-    const message = document.createElement("p");
-    message.className = "search-message";
-    message.textContent = airportDb
-      ? "No matching major airports. Try an ICAO/IATA code, city or airport name."
-      : "Airport search data could not load. Check your connection and try again.";
-
-    RESULTS.appendChild(message);
-    return;
-  }
-
-  searchMatches.forEach((airport, index) => {
+  airports.forEach(airport => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className =
-      "search-result" + (index === 0 ? " selected" : "");
+    button.className = "search-result";
     button.setAttribute("role", "option");
-    button.setAttribute("aria-selected", String(index === 0));
 
-    const top = document.createElement("span");
-    top.className = "search-result-top";
-
-    const code = document.createElement("strong");
+    const code = document.createElement("span");
     code.className = "search-result-code";
-    code.textContent = airportLabel(airport);
+    code.textContent = airport.iata
+      ? `${airport.ident} · ${airport.iata}`
+      : airport.ident;
 
     const name = document.createElement("span");
     name.className = "search-result-name";
     name.textContent = airport.name;
 
-    top.append(code, name);
+    const location = document.createElement("span");
+    location.className = "search-result-location";
 
-    const detail = document.createElement("span");
-    detail.className = "search-result-detail";
-    detail.textContent = [
-      airport.city,
-      countryName(airport.country)
-    ].filter(Boolean).join(", ") || "Airport";
-
-    button.append(top, detail);
-    button.addEventListener("click", () => chooseSearchAirport(airport));
-    RESULTS.appendChild(button);
-  });
-}
-
-function chooseSearchAirport(airport) {
-  const preset = AIRPORTS.find(label => {
-    const match = label.match(/\(([^)]+)\)/);
-
-    return icaoOf(label) === airport.icao ||
-      (airport.iata && match && match[1] === airport.iata);
-  });
-
-  SEARCH.value = "";
-  switchAirport(preset || airportLabel(airport));
-}
-
-function searchKeydown(event) {
-  if (event.key === "Escape") {
-    closeSearch();
-    return;
-  }
-
-  if (
-    ["ArrowDown", "ArrowUp"].includes(event.key) &&
-    !RESULTS.hidden &&
-    searchMatches.length
-  ) {
-    event.preventDefault();
-
-    selectedSearchIndex = (
-      selectedSearchIndex +
-      (event.key === "ArrowDown" ? 1 : -1) +
-      searchMatches.length
-    ) % searchMatches.length;
-
-    [...RESULTS.querySelectorAll(".search-result")].forEach(
-      (button, index) => {
-        button.classList.toggle(
-          "selected",
-          index === selectedSearchIndex
-        );
-        button.setAttribute(
-          "aria-selected",
-          String(index === selectedSearchIndex)
-        );
-      }
-    );
-
-    RESULTS.querySelectorAll(".search-result")[selectedSearchIndex]
-      ?.scrollIntoView({ block: "nearest" });
-  } else if (event.key === "Enter" && SEARCH.value.trim()) {
-    event.preventDefault();
-
-    if (searchMatches.length) {
-      chooseSearchAirport(
-        searchMatches[selectedSearchIndex] || searchMatches[0]
-      );
-    } else {
-      renderSearch();
-    }
-  }
-}
-
-async function fetchAndRender() {
-  const thisRequest = ++requestId;
-  const airport = icaoOf(currentAirport);
-
-  RAW.textContent = "Loading…";
-  DEC.innerHTML =
-    '<p class="placeholder">Fetching the latest report…</p>';
-
-  ISSUED.textContent = "";
-  UPDATED.textContent = "";
-  SOURCE.textContent = "";
-  REFRESH.disabled = true;
-
-  try {
-    const response = await fetch(
-      `https://metar.vatsim.net/${airport.toLowerCase()}`,
-      { cache: "no-store" }
-    );
-
-    if (!response.ok) {
-      throw new Error(`METAR service returned HTTP ${response.status}`);
-    }
-
-    const report = (await response.text()).trim();
-
-    if (thisRequest !== requestId) return;
-
-    if (!report || !report.toUpperCase().includes(airport)) {
-      throw new Error(`No usable METAR was returned for ${airport}.`);
-    }
-
-    RAW.textContent = report;
-
-    const decoded = decodeMetar(report);
-    DEC.innerHTML = buildDecodedHtml(decoded);
-
-    SOURCE.textContent =
-      `Source: metar.vatsim.net/${airport.toLowerCase()} • ` +
-      `${/\bAUTO\b/.test(report) ? "AUTO" : "MANUAL"}`;
-
-    const issue = report.match(/\b(\d{6})Z\b/);
-    const notes = [
-      decoded.stationType,
-      decoded.maintenance
+    const locationParts = [
+      airport.municipality,
+      airport.country
     ].filter(Boolean);
 
-    if (decoded.runwayStatus) {
-      notes.push(`Runway status:<br>${decoded.runwayStatus}`);
-    }
+    location.textContent = locationParts.join(", ");
 
-    ISSUED.innerHTML =
-      (notes.length
-        ? `<div class="small">${notes.join("<br>")}</div>`
-        : "") +
-      (issue
-        ? `<span class="footer-label">METAR issued:</span><br>` +
-          `${escapeHtml(formatNZTime(parseMetarTime(issue[1])))}` 
-        : "");
+    button.append(code, name, location);
 
-    UPDATED.innerHTML =
-      `Last updated:<br>${escapeHtml(formatNZTime(new Date()))}`;
-  } catch (error) {
-    if (thisRequest !== requestId) return;
+    button.addEventListener("click", () => {
+      SEARCH.value = `${airport.ident} — ${airport.name}`;
+      selectAirport(airport.ident);
+    });
 
-    RAW.textContent = "Could not load METAR.";
-    DEC.innerHTML =
-      `<p class="placeholder">${escapeHtml(error.message || String(error))}</p>`;
-    SOURCE.textContent =
-      `Source: metar.vatsim.net/${airport.toLowerCase()}`;
-  } finally {
-    if (thisRequest === requestId) {
-      REFRESH.disabled = false;
-    }
-  }
+    SEARCH_RESULTS.appendChild(button);
+  });
+
+  SEARCH_RESULTS.hidden = false;
+  SEARCH.setAttribute("aria-expanded", "true");
 }
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[char]);
+function showSearchMessage(message) {
+  SEARCH_RESULTS.replaceChildren();
+
+  const item = document.createElement("div");
+  item.className = "search-message";
+  item.textContent = message;
+
+  SEARCH_RESULTS.appendChild(item);
+  SEARCH_RESULTS.hidden = false;
+  SEARCH.setAttribute("aria-expanded", "true");
 }
 
-function row(label, value, extraClass = "") {
-  return `<div class="decoded-row ${extraClass}">` +
-    `<b class="label">${label}:</b> ${value}</div>`;
+function hideSearchResults() {
+  SEARCH_RESULTS.hidden = true;
+  SEARCH_RESULTS.replaceChildren();
+  SEARCH.setAttribute("aria-expanded", "false");
 }
 
-function listRow(label, value) {
-  return `<div class="decoded-row full-row">` +
-    `<b class="label">${label}:</b>` +
-    `<div class="cloud-indent">${value}</div></div>`;
-}
-
-function buildDecodedHtml(o) {
-  let html = "";
-
-  if (o.wind) html += row("Wind", o.wind);
-  if (o.windVariation) {
-    html += row("Wind direction variation", o.windVariation);
-  }
-  if (o.visibility) html += row("Visibility", o.visibility);
-  if (o.weatherHtml) html += listRow("Weather", o.weatherHtml);
-  if (o.cloudsHtml) html += listRow("Clouds", o.cloudsHtml);
-  if (o.temperature) html += row("Temperature", o.temperature);
-
-  if (o.preciseTemperature) {
-    html += row("Precise temperature", o.preciseTemperature);
-  }
-
-  if (o.sixHourTemps) {
-    html += row("6-hour temperature range", o.sixHourTemps);
-  }
-
-  if (o.qnhValue !== undefined) {
-    html += row(
-      "QNH",
-      `<span class="${o.qnhClass}">${o.qnhValue} hPa` +
-      `${o.qnhLabel ? ` — ${o.qnhLabel}` : ""}</span>`
-    );
-  }
-
-  if (o.altimeter) html += row("Altimeter", o.altimeter);
-  if (o.seaLevelPressure) {
-    html += row("Sea-level pressure", o.seaLevelPressure);
-  }
-  if (o.extremeTemps) {
-    html += row("24-hour temperature extremes", o.extremeTemps);
-  }
-  if (o.kaukau) html += row("Mt Kaukau wind", o.kaukau);
-  if (o.sugarloaf) html += row("Sugarloaf wind", o.sugarloaf);
-  if (o.trend) html += row("Trend", o.trend);
-
-  return html ||
-    '<p class="placeholder">No additional details were decoded from this report.</p>';
-}
-
-function decodeMetar(report) {
-  const out = {};
-  const parts = report.split(/\sRMK\s/);
-  const main = parts[0];
-  const remarks = parts[1] || "";
-  const tokens = main.trim().split(/\s+/);
-
-  // Wind: knots or metres per second, including gusts.
-  const wind = main.match(
-    /\b(\d{3}|VRB)(P?\d{2,3})(?:G(P?\d{2,3}))?(KT|MPS)\b/
-  );
-
-  if (wind) {
-    const direction =
-      wind[1] === "VRB" ? null : Number(wind[1]);
-    const speed = Number(wind[2].replace("P", ""));
-    const gust = wind[3]
-      ? Number(wind[3].replace("P", ""))
-      : null;
-    const mps = wind[4] === "MPS";
-
-    const kmh = value =>
-      mps ? (value * 3.6).toFixed(1) : Math.round(value * 1.852);
-
-    const knots = value => value * (mps ? 1.943844 : 1);
-    const classification = classifyWind(knots(gust ?? speed));
-
-    const directionText = direction === null
-      ? "Variable direction"
-      : `${direction}° (${degToCompass(direction)})`;
-
-    const speedText =
-      `${wind[2].startsWith("P") ? "more than " : ""}${speed} ` +
-      `${mps ? "m/s" : "knots"} (${kmh(speed)} km/h)`;
-
-    const gustText = gust === null
-      ? ""
-      : `, gusting ${wind[3].startsWith("P") ? "more than " : ""}` +
-        `${gust} ${mps ? "m/s" : "knots"} (${kmh(gust)} km/h)`;
-
-    out.wind =
-      `<span class="${classification}">${directionText} at ` +
-      `${speedText}${gustText}</span>`;
-  }
-
-  const variation = main.match(/\b(\d{3})V(\d{3})\b/);
-  if (variation) {
-    out.windVariation = `${variation[1]}° to ${variation[2]}°`;
-  }
-
-  // Visibility.
-  const timeIndex = tokens.findIndex(token => /^\d{6}Z$/.test(token));
-  let visToken = null;
-
-  for (const token of tokens.slice(Math.max(0, timeIndex + 1))) {
-    if (/^(?:AUTO|COR)$/.test(token)) continue;
-
-    if (/^(?:\d{3}|VRB)P?\d{2,3}(?:GP?\d{2,3})?(?:KT|MPS)$/.test(token)) {
-      continue;
-    }
-
-    if (
-      token === "CAVOK" ||
-      /^\d{4}$/.test(token) ||
-      /^(?:P|M)?(?:\d+(?:\.\d+)?|\d+\/\d+)SM$/.test(token)
-    ) {
-      visToken = token;
-      break;
-    }
-
-    if (
-      /^(?:\+|-)?(?:VC|MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|SA|DU|HZ|FU|VA|SQ|PO|DS|SS|FC|TS)$/.test(token) ||
-      /^(?:FEW|SCT|BKN|OVC|SKC|NSC|NCD|CLR|VV)\S*$/.test(token) ||
-      /^M?\d{2}\/(?:M?\d{2}|\/\/\/)$/.test(token) ||
-      /^Q\d{4}$/.test(token) ||
-      /^A\d{4}$/.test(token)
-    ) {
-      break;
-    }
-  }
-
-  if (visToken && /^\d{4}$/.test(visToken)) {
-    const metres = Number(visToken);
-
-    out.visibility = metres === 9999
-      ? "10 km or more (9999)"
-      : `${metres} metres (${(metres / 1000).toFixed(1)} km)`;
-  } else if (visToken && /SM$/.test(visToken)) {
-    const original = visToken.slice(0, -2);
-    const number = parseFraction(original.replace(/^[PM]/, ""));
-    const km = number * 1.609344;
-
-    out.visibility = original.startsWith("P")
-      ? `${km.toFixed(1)} km or more (${visToken})`
-      : original.startsWith("M")
-        ? `less than ${km.toFixed(1)} km (${visToken})`
-        : `${km.toFixed(1)} km (${visToken})`;
-  } else if (visToken === "CAVOK") {
-    out.visibility = "10 km or more (CAVOK)";
-  }
-
-  // Present weather, including smoke (FU).
-  const weatherPattern =
-    /^(?:\+|-)?(?:VC)?(?:(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|FG|BR|SA|DU|HZ|FU|VA|SQ|PO|DS|SS|FC)|TS)$/;
-
-  const wx = tokens.filter(token => weatherPattern.test(token));
-  const has = suffix => wx.some(token => token.endsWith(suffix));
-  const weather = [];
-
-  if (has("TSRA")) {
-    weather.push("• Thunderstorm with rain");
-  } else if (wx.some(token => token.endsWith("RA") && token.startsWith("+"))) {
-    weather.push("• Heavy rain");
-  } else if (wx.some(token => token.endsWith("RA") && token.startsWith("-"))) {
-    weather.push("• Light rain");
-  } else if (has("RA")) {
-    weather.push("• Rain");
-  }
-
-  if (wx.some(token => token.endsWith("DZ") && token.startsWith("-"))) {
-    weather.push("• Light drizzle");
-  } else if (has("DZ")) {
-    weather.push("• Drizzle");
-  }
-
-  if (wx.some(token => /(?:SN|SG|IC|PL|GR|GS|UP)$/.test(token))) {
-    weather.push("• Snow / frozen precipitation");
-  }
-
-  // Smoke goes after visibility, on the same line, when visibility is present.
-  if (has("FU") && out.visibility) {
-    out.visibility += " • Smoke";
-  } else if (has("FU")) {
-    weather.push("• Smoke");
-  }
-
-  if (has("HZ")) weather.push("• Haze");
-  if (has("FG")) weather.push("• Fog");
-  if (has("BR")) weather.push("• Mist");
-  if (has("SA")) weather.push("• Sand");
-  if (has("DU")) weather.push("• Widespread dust");
-  if (has("VA")) weather.push("• Volcanic ash");
-
-  if (
-    wx.some(token => /^(?:\+|-)?(?:VC)?TS(?:RA|SN|GS|GR|DZ)?$/.test(token)) &&
-    !has("TSRA")
-  ) {
-    weather.push(
-      wx.some(token => token.startsWith("VC"))
-        ? "• Thunderstorm nearby"
-        : "• Thunderstorm"
-    );
-  }
-
-  const recent = tokens.find(token => /^RE(?:RA|DZ|SN|TS)$/.test(token));
-
-  if (recent) {
-    weather.push(({
-      RERA: "• Recent rain",
-      REDZ: "• Recent drizzle",
-      RESN: "• Recent snow",
-      RETS: "• Recent thunderstorm"
-    })[recent]);
-  }
-
-  if (weather.length) {
-    out.weatherHtml = [...new Set(weather)].join("<br>");
-  }
-
-  // Clouds and vertical visibility.
-  const clouds = [...main.matchAll(
-    /\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g
-  )];
-
-  const cloudLines = clouds.map(match =>
-    `• ${{ FEW: "Few", SCT: "Scattered", BKN: "Broken", OVC: "Overcast" }[match[1]]} at ${Number(match[2]) * 100} ft${match[3] ? ` (${match[3]})` : ""}`
-  );
-
-  for (const vv of main.matchAll(/\bVV(\d{3}|\/\/\/)\b/g)) {
-    cloudLines.push(
-      vv[1] === "///"
-        ? "• Vertical visibility: height unavailable"
-        : `• Vertical visibility at ${Number(vv[1]) * 100} ft`
-    );
-  }
-
-  if (cloudLines.length) {
-    out.cloudsHtml = cloudLines.join("<br>");
-  } else if (/\b(NCD|NSC|SKC|CLR)\b/.test(main)) {
-    out.cloudsHtml = "• No clouds detected";
-  }
-
-  // Standard temperature and dew point.
-  const temp = main.match(
-    /\b(M?\d{2})\/(M?\d{2}|\/\/\/)(?=\s|$)/
-  );
-
-  if (temp) {
-    out.temperature = temp[2] === "///"
-      ? `${parseTemp(temp[1])}°C, dew point not reported`
-      : `${parseTemp(temp[1])}°C, dew point ${parseTemp(temp[2])}°C`;
-  }
-
-  // Precise temperature and dew point in US remarks.
-  const precise = remarks.match(/\bT([01])(\d{3})([01])(\d{3})\b/);
-
-  if (precise) {
-    out.preciseTemperature =
-      `${signedTenths(precise[1], precise[2]).toFixed(1)}°C, ` +
-      `dew point ${signedTenths(precise[3], precise[4]).toFixed(1)}°C`;
-  }
-
-  // Six-hour maximum and minimum temperature groups.
-  const sixMax = remarks.match(/(?:^|\s)1([01])(\d{3})(?=\s|$)/);
-  const sixMin = remarks.match(/(?:^|\s)2([01])(\d{3})(?=\s|$)/);
-
-  if (sixMax || sixMin) {
-    out.sixHourTemps = [
-      sixMax && `max ${signedTenths(sixMax[1], sixMax[2]).toFixed(1)}°C`,
-      sixMin && `min ${signedTenths(sixMin[1], sixMin[2]).toFixed(1)}°C`
-    ].filter(Boolean).join(", ");
-  }
-
-  // 24-hour temperature extremes.
-  const extremes = remarks.match(/\b4([01])(\d{3})([01])(\d{3})\b/);
-
-  if (extremes) {
-    out.extremeTemps =
-      `max ${signedTenths(extremes[1], extremes[2]).toFixed(1)}°C, ` +
-      `min ${signedTenths(extremes[3], extremes[4]).toFixed(1)}°C`;
-  }
-
-  // QNH.
-  const qnh = main.match(/\bQ(\d{4})\b/);
-
-  if (qnh) {
-    out.qnhValue = Number(qnh[1]);
-    const q = out.qnhValue;
-
-    out.qnhClass =
-      q < 980 ? "qnh-very-low" :
-      q < 1000 ? "qnh-low" :
-      q <= 1024 ? "qnh-normal" :
-      q <= 1039 ? "qnh-high" :
-      "qnh-very-high";
-
-    out.qnhLabel =
-      q < 990 ? "Very low" :
-      q < 1000 ? "Low" :
-      q <= 1024 ? "Normal" :
-      q <= 1039 ? "High" :
-      "Very high";
-  }
-
-  // US altimeter setting A####.
-  const altimeter = main.match(/\bA(\d{4})\b/);
-
-  if (altimeter) {
-    const inHg = Number(altimeter[1]) / 100;
-    out.altimeter =
-      `${(inHg * 33.8638866667).toFixed(1)} hPa (${inHg.toFixed(2)} inHg)`;
-  }
-
-  // Sea-level pressure SLPddd.
-  const slp = remarks.match(/\bSLP(\d{3})\b/);
-
-  if (slp) {
-    const digits = Number(slp[1]);
-    out.seaLevelPressure =
-      `${((digits < 500 ? 1000 : 900) + digits / 10).toFixed(1)} hPa`;
-  }
-
-  // Runway visual range.
-  const runwayLines = [];
-
-  for (const match of main.matchAll(
-    /\bR(\d{2}[LCR]?)\/(M|P)?(\d{4})(?:V(M|P)?(\d{4}))?([UDN])?(FT)?\b/g
-  )) {
-    const runway = match[1];
-    const unit = match[7] ? " ft" : " m";
-
-    const value =
-      `${match[2] === "M" ? "less than " : match[2] === "P" ? "more than " : ""}` +
-      `${match[3]}${unit}`;
-
-    const tendency = ({
-      U: "increasing",
-      D: "decreasing",
-      N: "no significant change"
-    })[match[6]];
-
-    runwayLines.push(
-      `• Runway ${runway}: runway visual range ${value}` +
-      `${match[4] && match[5] ? ` to ${match[5]}${unit}` : ""}` +
-      `${tendency ? `; ${tendency}` : ""}`
-    );
-  }
-
-  // Runway surface-condition groups.
-  for (const match of main.matchAll(
-    /\bR(\d{2}[LCR]?)\/(CLRD[A-Z0-9/]*|SNOCLO|[0-9/]{6})\b/g
-  )) {
-    const code = match[2];
-
-    if (code === "SNOCLO") {
-      runwayLines.push(`• Runway ${match[1]}: closed due to snow`);
-    } else if (code.startsWith("CLRD")) {
-      runwayLines.push(
-        `• Runway ${match[1]}: runway deposits cleared (${code})`
-      );
-    } else if (/^[0-9/]{6}$/.test(code)) {
-      const deposits = {
-        "0": "clear and dry",
-        "1": "damp",
-        "2": "wet or water patches",
-        "3": "rime or frost",
-        "4": "dry snow",
-        "5": "wet snow",
-        "6": "slush",
-        "7": "ice",
-        "8": "compacted snow",
-        "9": "frozen ruts or ridges",
-        "/": "not reported"
-      };
-
-      runwayLines.push(
-        `• Runway ${match[1]}: ${deposits[code[0]] || "unknown deposit"}; ` +
-        `deposit code ${code}`
-      );
-    }
-  }
-
-  if (runwayLines.length) {
-    out.runwayStatus = [...new Set(runwayLines)].join("<br>");
-  }
-
-  // Trend.
-  if (/\bNOSIG\b/.test(main)) {
-    out.trend =
-      "No significant change expected during the trend period (NOSIG)";
-  } else {
-    const trend = main.match(/\b(BECMG|TEMPO|PROB\d{2})\b/);
-
-    if (trend) {
-      out.trend =
-        `Trend group reported: ${trend[0]} ` +
-        "(see the raw METAR for its full period and conditions)";
-    }
-  }
-
-  // Automated station type and maintenance indicator.
-  const ao = remarks.match(/\bAO([12])\b/);
-
-  if (ao) {
-    out.stationType = ao[1] === "2"
-      ? "Station type: AO2 — automated station with precipitation discriminator"
-      : "Station type: AO1 — automated station without precipitation discriminator";
-  }
-
-  if (/(?:^|\s)\$(?:\s|$)/.test(remarks)) {
-    out.maintenance = "Maintenance indicator: $";
-  }
-
-  // Mt Kaukau and Sugarloaf wind remarks.
-  const kau = report.match(
-    /\bKAUKAU\s+(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/i
-  );
-
-  if (kau) {
-    out.kaukau = windRemark(kau[1], kau[2], kau[3]);
-  }
-
-  const sugar = report.match(
-    /\bSUGARLOAF\s+(\d{3})(\d{2,3})(?:G(\d{2,3}))?KT\b/i
-  );
-
-  if (sugar) {
-    out.sugarloaf = windRemark(sugar[1], sugar[2], sugar[3]);
-  }
-
-  return out;
-}
-
-function windRemark(direction, speed, gust) {
-  const s = Number(speed);
-  const g = gust ? Number(gust) : null;
-
-  return `<span class="${classifyWind(g ?? s)}">` +
-    `${direction}° (${degToCompass(Number(direction))}) at ${s} knots ` +
-    `(${Math.round(s * 1.852)} km/h)` +
-    `${g ? `, gusting ${g} knots (${Math.round(g * 1.852)} km/h)` : ""}` +
-    `</span>`;
-}
-
-function classifyWind(knots) {
-  return knots >= 55 ? "severe" :
-    knots >= 40 ? "strong" :
-    knots >= 25 ? "breezy" :
-    "good";
-}
-
-function parseTemp(value) {
-  return value.startsWith("M")
-    ? -Number(value.slice(1))
-    : Number(value);
-}
-
-function parseFraction(value) {
-  if (!value.includes("/")) return Number(value);
-
-  const [numerator, denominator] = value.split("/").map(Number);
-  return denominator ? numerator / denominator : 0;
-}
-
-function signedTenths(sign, digits) {
-  const value = Number(digits) / 10;
-  return sign === "1" ? -value : value;
-}
-
-function degToCompass(degrees) {
-  return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][
-    Math.round(degrees / 45) % 8
-  ];
-}
-
-function parseMetarTime(group) {
-  const now = new Date();
-
-  let date = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    Number(group.slice(0, 2)),
-    Number(group.slice(2, 4)),
-    Number(group.slice(4, 6))
-  ));
-
-  if (date - now > 15 * 86400000) {
-    date.setUTCMonth(date.getUTCMonth() - 1);
-  } else if (now - date > 15 * 86400000) {
-    date.setUTCMonth(date.getUTCMonth() + 1);
-  }
-
-  return date;
-}
+/* New Zealand local time */
 
 function formatNZTime(date) {
-  const parts = new Intl.DateTimeFormat("en-NZ", {
+  return new Intl.DateTimeFormat("en-NZ", {
     timeZone: "Pacific/Auckland",
-    day: "2-digit",
-    month: "2-digit",
     year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
     timeZoneName: "short"
-  }).formatToParts(date);
+  }).format(date);
+}
 
-  const get = type =>
-    parts.find(part => part.type === type)?.value || "";
+/* Decoded summary */
 
-  return `${get("day")}/${get("month")}/${get("year")} ` +
-    `${get("hour")}:${get("minute")}:${get("second")} ` +
-    `${get("timeZoneName")}`;
+function buildDecodedHtml(obj) {
+  let html = "";
+
+  if (obj.wind) {
+    html += `<div><b class="label">Wind:</b> ${obj.wind}</div>`;
+  }
+
+  if (obj.visibility) {
+    html += `<div><b class="label">Visibility:</b> ${obj.visibility}</div>`;
+  }
+
+  if (obj.weatherHtml) {
+    html +=
+      `<div><b class="label">Weather:</b><br>` +
+      `<div class="cloud-indent">${obj.weatherHtml}</div></div>`;
+  }
+
+  if (obj.cloudsHtml) {
+    html +=
+      `<div><b class="label">Clouds:</b><br>` +
+      `<div class="cloud-indent">${obj.cloudsHtml}</div></div>`;
+  }
+
+  if (obj.temperature) {
+    html +=
+      `<div><b class="label">Temperature:</b> ${obj.temperature}</div>`;
+  }
+
+  if (obj.qnhValue !== undefined) {
+    html +=
+      `<div><b class="label">QNH:</b> ` +
+      `<span class="${obj.qnhClass}">` +
+      `${obj.qnhValue} hPa (${obj.qnhLabel})</span></div>`;
+  }
+
+  if (obj.kaukau) {
+    html +=
+      `<div><b class="label">Mt Kaukau Wind:</b> ${obj.kaukau}</div>`;
+  }
+
+  if (obj.sugarloaf) {
+    html +=
+      `<div><b class="label">Sugarloaf Wind:</b> ${obj.sugarloaf}</div>`;
+  }
+
+  return html || "<div>No detailed data decoded.</div>";
+}
+
+/* METAR decoder */
+
+function decodeMetar(metar) {
+  const out = {};
+
+  if (!metar) return out;
+
+  const tokens = metar.trim().split(/\s+/);
+  const rmkIndex = tokens.indexOf("RMK");
+
+  const mainTokens = rmkIndex >= 0
+    ? tokens.slice(0, rmkIndex)
+    : tokens;
+
+  const remarks = rmkIndex >= 0
+    ? tokens.slice(rmkIndex + 1)
+    : [];
+
+  /* Wind */
+
+  const windToken = mainTokens.find(token =>
+    /^(?:\d{3}|VRB)\d{2,3}(?:G\d{2,3})?KT$/.test(token)
+  );
+
+  if (windToken) {
+    out.wind = formatWind(windToken);
+  }
+
+  /* Visibility and visibility-related weather */
+
+  const visibilityToken = mainTokens.find(token =>
+    /^\d{4}$/.test(token)
+  );
+
+  const hasHaze = mainTokens.includes("HZ");
+  const hasMist = mainTokens.includes("BR");
+  const hasFog = mainTokens.includes("FG");
+  const hasSmoke = mainTokens.includes("FU");
+
+  if (mainTokens.includes("CAVOK")) {
+    out.visibility = "10 km or more";
+  } else if (visibilityToken) {
+    const metres = Number(visibilityToken);
+    const conditions = [];
+
+    if (hasHaze) conditions.push("Haze");
+    if (hasMist) conditions.push("Mist");
+    if (hasFog) conditions.push("Fog");
+    if (hasSmoke) conditions.push("Smoke");
+
+    const extra = conditions.length
+      ? ` • ${conditions.join(", ")}`
+      : "";
+
+    out.visibility = metres === 9999
+      ? `9999 metres (10 km +)${extra}`
+      : `${metres} metres (${(metres / 1000).toFixed(1)} km)${extra}`;
+  }
+
+  /* Actual weather groups */
+
+  const weatherGroups = mainTokens.filter(isWeatherToken);
+  const weatherLines = [];
+
+  const hasTS = weatherGroups.some(token => /TS/.test(token));
+  const rainToken = weatherGroups.find(token => /RA/.test(token));
+  const drizzleToken = weatherGroups.find(token => /DZ/.test(token));
+
+  if (hasTS) {
+    weatherLines.push(
+      rainToken
+        ? "• Thunderstorm with rain"
+        : "• Thunderstorm"
+    );
+  } else {
+    if (rainToken) {
+      weatherLines.push(
+        rainToken.startsWith("-") ? "• Light rain" :
+        rainToken.startsWith("+") ? "• Heavy rain" :
+        "• Rain"
+      );
+    }
+
+    if (drizzleToken) {
+      weatherLines.push(
+        drizzleToken.startsWith("-") ? "• Light drizzle" :
+        drizzleToken.startsWith("+") ? "• Heavy drizzle" :
+        "• Drizzle"
+      );
+    }
+  }
+
+  if (weatherGroups.some(token => /SN/.test(token))) {
+    weatherLines.push("• Snow");
+  }
+
+  if (weatherGroups.some(token => /GR|GS/.test(token))) {
+    weatherLines.push("• Hail or small hail");
+  }
+
+  if (weatherGroups.some(token => /FZ/.test(token))) {
+    weatherLines.push("• Freezing precipitation");
+  }
+
+  if (weatherGroups.some(token => /VA/.test(token))) {
+    weatherLines.push("• Volcanic ash");
+  }
+
+  if (weatherGroups.some(token => /DU|SA/.test(token))) {
+    weatherLines.push("• Dust or sand");
+  }
+
+  if (hasSmoke && !out.visibility) {
+    weatherLines.push("• Smoke");
+  }
+
+  if (/\bRERA\b/.test(metar)) {
+    weatherLines.push("• Recent rain");
+  }
+
+  if (/\bRETS\b/.test(metar)) {
+    weatherLines.push("• Recent thunderstorm");
+  }
+
+  if (weatherLines.length) {
+    out.weatherHtml = weatherLines.join("<br>");
+  }
+
+  /* Clouds */
+
+  const cloudMap = {
+    FEW: "Few",
+    SCT: "Scattered",
+    BKN: "Broken",
+    OVC: "Overcast"
+  };
+
+  const clouds = [
+    ...mainTokens.join(" ").matchAll(
+      /\b(FEW|SCT|BKN|OVC)(\d{3})(CB|TCU)?\b/g
+    )
+  ];
+
+  if (clouds.length) {
+    out.cloudsHtml = clouds
+      .map(match => {
+        const amount = cloudMap[match[1]];
+        const height = Number(match[2]) * 100;
+        const type = match[3] === "CB"
+          ? " (Cumulonimbus)"
+          : match[3] === "TCU"
+            ? " (Towering cumulus)"
+            : "";
+
+        return `• ${amount} at ${height} ft${type}`;
+      })
+      .join("<br>");
+  } else if (
+    mainTokens.includes("NCD") ||
+    mainTokens.includes("NSC")
+  ) {
+    out.cloudsHtml = "• No significant clouds detected";
+  } else if (
+    mainTokens.includes("SKC") ||
+    mainTokens.includes("CLR")
+  ) {
+    out.cloudsHtml = "• Clear skies";
+  }
+
+  const verticalVisibility = mainTokens.find(token =>
+    /^VV\d{3}$/.test(token)
+  );
+
+  if (verticalVisibility) {
+    const height = Number(verticalVisibility.slice(2)) * 100;
+    const verticalText = `• Vertical visibility ${height} ft`;
+
+    out.cloudsHtml = out.cloudsHtml
+      ? `${out.cloudsHtml}<br>${verticalText}`
+      : verticalText;
+  }
+
+  /* Temperature and dew point */
+
+  const tempToken = mainTokens.find(token =>
+    /^(?:M?\d{2})\/(?:M?\d{2})$/.test(token)
+  );
+
+  if (tempToken) {
+    const [temperature, dewPoint] = tempToken.split("/");
+
+    out.temperature =
+      `${parseTemp(temperature)}°C, ` +
+      `Dew Point: ${parseTemp(dewPoint)}°C`;
+  }
+
+  /* QNH */
+
+  const qnhMatch = metar.match(/(?:^|\s)Q(\d{4})(?=\s|$)/);
+
+  if (qnhMatch) {
+    out.qnhValue = Number(qnhMatch[1]);
+
+    const pressure = out.qnhValue;
+
+    if (pressure < 980) {
+      [out.qnhLabel, out.qnhClass] = [
+        "Very Low",
+        "qnh-very-low"
+      ];
+    } else if (pressure < 990) {
+      [out.qnhLabel, out.qnhClass] = [
+        "Low",
+        "qnh-low"
+      ];
+    } else if (pressure <= 1020) {
+      [out.qnhLabel, out.qnhClass] = [
+        "Mild",
+        "qnh-mild"
+      ];
+    } else if (pressure <= 1030) {
+      [out.qnhLabel, out.qnhClass] = [
+        "High",
+        "qnh-high"
+      ];
+    } else {
+      [out.qnhLabel, out.qnhClass] = [
+        "Very High",
+        "qnh-very-high"
+      ];
+    }
+  }
+
+  /* Mt Kaukau wind in remarks */
+
+  const kaukauIndex = remarks.indexOf("KAUKAU");
+
+  if (kaukauIndex >= 0 && remarks[kaukauIndex + 1]) {
+    const token = remarks[kaukauIndex + 1];
+
+    if (/^\d{3}\d{2,3}(?:G\d{2,3})?KT$/.test(token)) {
+      out.kaukau = formatWind(token);
+    }
+  }
+
+  /* Sugarloaf wind in remarks */
+
+  const sugarloafIndex = remarks.findIndex(token =>
+    /^SUGARLOAF$/i.test(token)
+  );
+
+  if (
+    sugarloafIndex >= 0 &&
+    remarks[sugarloafIndex + 1]
+  ) {
+    const token = remarks[sugarloafIndex + 1];
+
+    if (/^\d{3}\d{2,3}(?:G\d{2,3})?KT$/.test(token)) {
+      out.sugarloaf = formatWind(token);
+    }
+  }
+
+  return out;
+}
+
+/* Recognise complete METAR weather groups */
+
+function isWeatherToken(token) {
+  return /^(?:\+|-)?(?:VC)?(?:(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS)+|TS)$/.test(token);
+}
+
+/* Wind direction, speed, gusts, and colours */
+
+function formatWind(token) {
+  const match = token.match(
+    /^(VRB|\d{3})(\d{2,3})(?:G(\d{2,3}))?KT$/
+  );
+
+  if (!match) return "";
+
+  const direction = match[1] === "VRB"
+    ? null
+    : Number(match[1]);
+
+  const speed = Number(match[2]);
+  const gust = match[3] ? Number(match[3]) : null;
+
+  const speedKmh = Math.round(speed * 1.852);
+  const gustKmh = gust === null
+    ? null
+    : Math.round(gust * 1.852);
+
+  const classification = classifyWind(
+    gust === null ? speed : gust
+  );
+
+  const directionText = direction === null
+    ? "Variable direction"
+    : `${direction}° (${degToCompass(direction)})`;
+
+  return (
+    `<span class="${classification}">` +
+    `${directionText} at ${speed} knots (${speedKmh} km/h)` +
+    `${gust === null
+      ? ""
+      : ` gusting ${gust} (${gustKmh} km/h)`}` +
+    `</span>`
+  );
+}
+
+function classifyWind(speed) {
+  if (speed >= 55) return "severe";
+  if (speed >= 40) return "strong";
+  if (speed >= 25) return "breezy";
+  return "";
+}
+
+function parseTemp(value) {
+  return value.startsWith("M")
+    ? -parseInt(value.slice(1), 10)
+    : Number(value);
+}
+
+function degToCompass(degrees) {
+  return [
+    "N",
+    "NE",
+    "E",
+    "SE",
+    "S",
+    "SW",
+    "W",
+    "NW"
+  ][Math.round(degrees / 45) % 8];
+}
+
+/* Convert a METAR DDHHMMZ group to a Date */
+
+function parseMetarTime(group) {
+  const day = Number(group.slice(0, 2));
+  const hour = Number(group.slice(2, 4));
+  const minute = Number(group.slice(4, 6));
+
+  const now = new Date();
+
+  let year = now.getUTCFullYear();
+  let month = now.getUTCMonth();
+
+  if (day > now.getUTCDate() + 1) {
+    month--;
+  } else if (day < now.getUTCDate() - 27) {
+    month++;
+  }
+
+  return new Date(Date.UTC(year, month, day, hour, minute));
+}
+
+/* Escape plain text before placing it inside HTML */
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => {
+    const replacements = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+
+    return replacements[character];
+  });
 }
