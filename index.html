@@ -2,103 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0f1724">
-  <title>NZ METAR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <section class="airport-search" aria-label="Search airports">
-      <label for="airportSearch">Search airports worldwide</label>
+  <div class="airport-search">
+    <label class="search-label" for="airportSearch">Search airports</label>
+    <div class="search-box">
+      <span class="search-icon" aria-hidden="true">⌕</span>
       <input
         id="airportSearch"
         type="search"
-        placeholder="ICAO, IATA, airport, or city..."
+        placeholder="ICAO, IATA, city or airport name…"
         autocomplete="off"
         spellcheck="false"
+        role="combobox"
+        aria-autocomplete="list"
         aria-controls="airportSearchResults"
         aria-expanded="false"
       >
-      <div
-        id="airportSearchResults"
-        class="search-results"
-        role="listbox"
-        aria-label="Airport search results"
-        hidden
-      ></div>
-      <p class="search-help">Search by airport code, airport name, or city.</p>
-    </section>
+    </div>
+    <div id="airportSearchResults" class="search-results" role="listbox" aria-label="Airport search results" hidden></div>
+  </div>
 
-    <nav class="airport-nav" aria-label="Preset airports">
-      <button
-        class="nav-arrow"
-        id="prevAirports"
-        type="button"
-        aria-label="Previous airports"
-        title="Previous airports"
-      >‹</button>
+  <div class="airport-selector" aria-label="Airport selector">
+    <button class="nav-arrow" id="prevAirports" type="button" aria-label="Previous airports" title="Previous airports">
+      <span aria-hidden="true">‹</span>
+    </button>
+    <div class="tabs-viewport">
+      <div class="tabs" id="tabTrack"></div>
+    </div>
+    <button class="nav-arrow" id="nextAirports" type="button" aria-label="Next airports" title="Next airports">
+      <span aria-hidden="true">›</span>
+    </button>
+  </div>
 
-      <div class="tabs" id="airportTabs">
-        <button
-          class="tab active"
-          id="tab-nzwn"
-          type="button"
-          data-airport="NZWN"
-          aria-pressed="true"
-        >NZWN</button>
-
-        <button
-          class="tab"
-          id="tab-nzaa"
-          type="button"
-          data-airport="NZAA"
-          aria-pressed="false"
-        >NZAA</button>
-
-        <button
-          class="tab"
-          id="tab-nzch"
-          type="button"
-          data-airport="NZCH"
-          aria-pressed="false"
-          hidden
-        >NZCH</button>
-      </div>
-
-      <button
-        class="nav-arrow"
-        id="nextAirports"
-        type="button"
-        aria-label="Next airports"
-        title="Next airports"
-      >›</button>
-    </nav>
-
-    <section class="card">
-      <header class="header">
-        <h1 class="title">✈️ NZWN METAR</h1>
-        <button class="btn" id="refreshBtn" type="button">Refresh</button>
-      </header>
-
-      <section class="raw-section">
-        <label for="rawMetar">Raw METAR</label>
-        <pre class="raw" id="rawMetar">Loading…</pre>
-      </section>
-
-      <section class="decoded-section">
-        <h2>Decoded Summary</h2>
-        <div class="decoded" id="decodedContent"></div>
-      </section>
-
-      <footer class="footer">
-        <div class="issued" id="issuedTime"></div>
-        <div class="updated" id="lastUpdated"></div>
-        <div class="small" id="sourceInfo"></div>
-      </footer>
-    </section>
-  </main>
-
+  <div class="card">
+    <div class="header">
+      <div class="title">✈️ NZWN METAR</div>
+      <button class="btn" id="refreshBtn" type="button">Refresh</button>
+    </div>
+    <div class="raw-section">
+      <label>Raw METAR</label>
+      <pre class="raw" id="rawMetar">—</pre>
+    </div>
+    <div class="decoded-section">
+      <h3>Decoded Summary</h3>
+      <div class="decoded" id="decodedContent"></div>
+    </div>
+    <div class="footer">
+      <div class="issued" id="issuedTime"></div>
+      <div class="updated" id="lastUpdated"></div>
+      <div class="small" id="sourceInfo"></div>
+    </div>
+  </div>
   <script src="popup.js"></script>
 </body>
 </html>
