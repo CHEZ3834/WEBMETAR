@@ -22,7 +22,7 @@ html {
 
 body {
   margin: 0;
-  padding: 10px;
+  padding: 16px;
   min-height: 100vh;
   width: 100%;
   background: var(--bg);
@@ -161,7 +161,8 @@ button {
 /* Airport selector */
 
 .airport-selector {
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
   align-items: stretch;
   gap: 5px;
   width: 100%;
@@ -169,8 +170,8 @@ button {
 }
 
 .tabs-viewport {
-  flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
   overflow: hidden;
 }
 
@@ -185,6 +186,7 @@ button {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
+  width: 0;
   padding: 10px 4px;
   border: 0;
   background: transparent;
@@ -193,6 +195,9 @@ button {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab[hidden] {
@@ -221,12 +226,15 @@ button {
   outline-offset: 2px;
 }
 
-/* Side navigation buttons */
+/* Side buttons */
 
 .nav-arrow {
-  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   min-width: 34px;
+  height: 100%;
   min-height: 38px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -236,9 +244,6 @@ button {
   font-size: 25px;
   line-height: 1;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .nav-arrow:disabled {
@@ -251,9 +256,9 @@ button {
 .card {
   width: 100%;
   margin: 10px auto;
-  padding: 12px;
+  padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
+  border-radius: 14px;
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.025),
@@ -274,7 +279,7 @@ button {
   min-width: 0;
   margin: 0;
   color: var(--accent-light);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -314,7 +319,7 @@ button {
   background: rgba(255, 255, 255, 0.025);
   color: #dceffb;
   font-family: "Courier New", monospace;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -338,9 +343,9 @@ button {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding: 7px;
+  padding: 10px;
   border-radius: 9px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -438,27 +443,30 @@ b.label {
     row-gap: 12px;
   }
 
+  .airport-selector {
+    grid-template-columns: 36px minmax(0, 1fr) 36px;
+  }
+
   .nav-arrow {
-    flex-basis: 36px;
     width: 36px;
   }
 }
 
-/* Small mobile screens */
+/* Mobile */
 
-@media (max-width: 360px) {
+@media (max-width: 480px) {
   body {
-    padding: 8px;
+    padding: 10px;
   }
 
   .airport-selector {
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
     gap: 4px;
   }
 
   .nav-arrow {
-    flex-basis: 30px;
-    width: 30px;
-    min-width: 30px;
+    width: 32px;
+    min-width: 32px;
     min-height: 36px;
     font-size: 23px;
   }
@@ -469,6 +477,47 @@ b.label {
   }
 
   .card {
-    padding: 10px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .title {
+    font-size: 16px;
+  }
+
+  .raw {
+    font-size: 12px;
+  }
+
+  .decoded {
+    padding: 7px;
+    font-size: 12px;
+  }
+
+  .search-results {
+    max-height: 55vh;
+  }
+}
+
+/* Very small phones */
+
+@media (max-width: 360px) {
+  body {
+    padding: 8px;
+  }
+
+  .airport-selector {
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    gap: 3px;
+  }
+
+  .nav-arrow {
+    width: 30px;
+    min-width: 30px;
+    font-size: 22px;
+  }
+
+  .tab {
+    font-size: 11px;
   }
 }
