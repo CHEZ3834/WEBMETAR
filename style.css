@@ -158,9 +158,9 @@ button {
   font-size: 13px;
 }
 
-/* Preset airport navigation */
+/* Airport selector */
 
-.airport-nav {
+.airport-selector {
   display: flex;
   align-items: stretch;
   gap: 7px;
@@ -168,16 +168,21 @@ button {
   margin: 0 auto;
 }
 
-.tabs {
-  display: flex;
+.tabs-viewport {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  width: 100%;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .tab {
   position: relative;
-  flex: 1 1 50%;
+  flex: 1 1 0;
   min-width: 0;
   padding: 10px 6px;
   border: 0;
