@@ -22,7 +22,7 @@ html {
 
 body {
   margin: 0;
-  padding: 16px;
+  padding: 10px;
   min-height: 100vh;
   width: 100%;
   background: var(--bg);
@@ -163,13 +163,13 @@ button {
 .airport-selector {
   display: flex;
   align-items: stretch;
-  gap: 7px;
+  gap: 5px;
   width: 100%;
   margin: 0 auto;
 }
 
 .tabs-viewport {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
 }
@@ -177,6 +177,7 @@ button {
 .tabs {
   display: flex;
   width: 100%;
+  min-width: 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -184,7 +185,7 @@ button {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
-  padding: 10px 6px;
+  padding: 10px 4px;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -220,16 +221,24 @@ button {
   outline-offset: 2px;
 }
 
+/* Side navigation buttons */
+
 .nav-arrow {
-  flex: 0 0 36px;
-  width: 36px;
+  flex: 0 0 34px;
+  width: 34px;
+  min-width: 34px;
+  min-height: 38px;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9px 9px 0 0;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   color: #e6eef8;
   font-size: 25px;
   line-height: 1;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nav-arrow:disabled {
@@ -242,9 +251,9 @@ button {
 .card {
   width: 100%;
   margin: 10px auto;
-  padding: 16px;
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.025),
@@ -265,7 +274,7 @@ button {
   min-width: 0;
   margin: 0;
   color: var(--accent-light);
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -305,7 +314,7 @@ button {
   background: rgba(255, 255, 255, 0.025);
   color: #dceffb;
   font-family: "Courier New", monospace;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -329,9 +338,9 @@ button {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  padding: 10px;
+  padding: 7px;
   border-radius: 9px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -406,7 +415,7 @@ b.label {
   font-size: 11px;
 }
 
-/* Desktop layout */
+/* Desktop */
 
 @media (min-width: 700px) {
   body {
@@ -428,39 +437,38 @@ b.label {
     column-gap: 24px;
     row-gap: 12px;
   }
+
+  .nav-arrow {
+    flex-basis: 36px;
+    width: 36px;
+  }
 }
 
-/* Mobile layout */
+/* Small mobile screens */
 
-@media (max-width: 480px) {
+@media (max-width: 360px) {
   body {
-    padding: 10px;
+    padding: 8px;
   }
 
-  .card {
-    padding: 12px;
-    border-radius: 12px;
-  }
-
-  .title {
-    font-size: 16px;
-  }
-
-  .raw {
-    font-size: 12px;
-  }
-
-  .decoded {
-    padding: 7px;
-    font-size: 12px;
+  .airport-selector {
+    gap: 4px;
   }
 
   .nav-arrow {
-    flex-basis: 32px;
-    width: 32px;
+    flex-basis: 30px;
+    width: 30px;
+    min-width: 30px;
+    min-height: 36px;
+    font-size: 23px;
   }
 
-  .search-results {
-    max-height: 55vh;
+  .tab {
+    padding: 9px 2px;
+    font-size: 12px;
+  }
+
+  .card {
+    padding: 10px;
   }
 }
