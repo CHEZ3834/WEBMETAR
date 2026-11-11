@@ -1,523 +1,177 @@
-:root {
-  --bg: #0f1724;
-  --card: #0b1220;
-  --muted: #94a3b8;
-  --accent: #2b6cb0;
-  --accent-light: #3a89d6;
-  --label: #4aa3d6;
-  --good: #ffffff;
-  --breezy: #f1c40f;
-  --strong: #e67e22;
-  --severe: #e74c3c;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  min-height: 100%;
-  background: var(--bg);
-}
-
-body {
-  margin: 0;
-  padding: 16px;
-  min-height: 100vh;
-  width: 100%;
-  background: var(--bg);
-  color: #e6eef8;
-  font-family: "Segoe UI", Roboto, Arial, sans-serif;
-}
-
-button,
-input {
-  font: inherit;
-}
-
-button {
-  -webkit-tap-highlight-color: transparent;
-}
-
-.app {
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-/* Airport search */
-
-.airport-search {
-  position: relative;
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto 12px;
-}
-
-.airport-search > label {
-  display: block;
-  margin-bottom: 7px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-#airportSearch {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  padding: 11px 13px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 10px;
-  outline: none;
-  background: var(--card);
-  color: #e6eef8;
-  font-size: 14px;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-#airportSearch::placeholder {
-  color: #718198;
-}
-
-#airportSearch:focus {
-  border-color: var(--accent-light);
-  box-shadow: 0 0 0 2px rgba(58, 137, 214, 0.18);
-}
-
-.search-help {
-  margin: 6px 2px 0;
-  color: #7f94ad;
-  font-size: 11px;
-}
-
-.search-results {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% - 19px);
-  left: 0;
-  right: 0;
-  max-height: 320px;
-  overflow-y: auto;
-  margin-top: 4px;
-  padding: 5px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 11px;
-  background: #111c2d;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
-}
-
-.search-results[hidden] {
-  display: none;
-}
-
-.search-result {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #e6eef8;
-  text-align: left;
-  cursor: pointer;
-}
-
-.search-result:hover,
-.search-result:focus-visible {
-  outline: none;
-  background: rgba(58, 137, 214, 0.15);
-}
-
-.search-result-code {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--accent-light);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.search-result-name {
-  display: block;
-  overflow-wrap: anywhere;
-  color: #e6eef8;
-  font-size: 13px;
-}
-
-.search-result-location {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.search-message {
-  padding: 10px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-/* Airport selector */
+/* =========================================================
+   AIRPORT SELECTOR
+   3 tabs in one row, arrows on the outside
+   No horizontal scrolling/swiping
+   ========================================================= */
 
 .airport-selector {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 34px;
-  align-items: stretch;
-  gap: 5px;
   width: 100%;
-  margin: 0 auto;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: stretch !important;
+  justify-content: center !important;
+  gap: 6px;
+  box-sizing: border-box;
+  margin: 10px 0;
+  overflow: visible !important;
 }
 
-.tabs-viewport {
-  min-width: 0;
-  width: 100%;
-  overflow: hidden;
-}
+/* Left and right arrow buttons */
+.airport-selector .nav-arrow {
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
 
-.tabs {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 
-.tab {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 0;
-  width: 0;
-  padding: 10px 4px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
+  box-sizing: border-box;
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border: none;
+  border-radius: 10px;
+
   cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tab[hidden] {
-  display: none;
-}
-
-.tab.active {
-  color: var(--accent-light);
-}
-
-.tab.active::after {
-  position: absolute;
-  right: 25%;
-  bottom: -1px;
-  left: 25%;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--accent-light);
-  content: "";
-}
-
-.tab:focus-visible,
-.nav-arrow:focus-visible,
-.btn:focus-visible {
-  outline: 2px solid var(--accent-light);
-  outline-offset: 2px;
-}
-
-/* Side buttons */
-
-.nav-arrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  min-width: 34px;
-  height: 100%;
-  min-height: 38px;
-  padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-  color: #e6eef8;
-  font-size: 25px;
+  font-size: 28px;
   line-height: 1;
-  cursor: pointer;
+
+  flex-shrink: 0 !important;
 }
 
-.nav-arrow:disabled {
-  opacity: 0.3;
+/* Disabled arrow */
+.airport-selector .nav-arrow:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
-/* Main card */
+/* The middle area containing the 3 tabs */
+.airport-selector .tabs-viewport {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
 
-.card {
-  width: 100%;
-  margin: 10px auto;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 14px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.025),
-    rgba(255, 255, 255, 0.01)
-  );
-  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.45);
+  height: 42px !important;
+
+  overflow: hidden !important;
+  box-sizing: border-box;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+/* The actual row of tabs */
+.airport-selector .tabs {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+
+  width: 100% !important;
+  height: 42px !important;
+  min-width: 0 !important;
+
+  gap: 5px;
+
+  overflow: hidden !important;
+  box-sizing: border-box;
 }
 
-.title {
-  min-width: 0;
-  margin: 0;
-  color: var(--accent-light);
-  font-size: 18px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
+/* Each airport tab */
+.airport-selector .tab {
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
 
-.btn {
-  flex: 0 0 auto;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 9px;
-  background: linear-gradient(180deg, var(--accent), var(--accent-light));
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
+  height: 42px !important;
+  min-height: 42px !important;
 
-.btn:hover {
-  filter: brightness(1.08);
-}
+  margin: 0 !important;
+  padding: 0 4px !important;
 
-.btn:active {
-  transform: translateY(1px);
-}
+  box-sizing: border-box;
 
-/* Raw METAR */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 
-.raw-section label {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-}
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 
-.raw {
-  margin: 6px 0 0;
-  padding: 10px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
-  color: #dceffb;
-  font-family: "Courier New", monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  user-select: text;
+
+  font-size: 14px;
 }
 
-/* Decoded summary */
-
-.decoded-section {
-  margin-top: 14px;
+/* If only one tab is being displayed */
+.airport-selector .tabs.single-tab .tab {
+  flex: 1 1 100% !important;
 }
 
-.decoded-section h2 {
-  margin: 0 0 7px;
-  color: var(--accent-light);
-  font-size: 15px;
-  font-weight: 600;
-}
+/* =========================================================
+   SMALL PHONES
+   ========================================================= */
 
-.decoded {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  padding: 10px;
-  border-radius: 9px;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.decoded > div {
-  min-width: 0;
-}
-
-b.label {
-  color: var(--label);
-  font-weight: 700;
-}
-
-.breezy {
-  color: var(--breezy);
-  font-weight: 700;
-}
-
-.strong {
-  color: var(--strong);
-  font-weight: 700;
-}
-
-.severe {
-  color: var(--severe);
-  font-weight: 700;
-}
-
-.qnh-mild {
-  color: var(--good);
-  font-weight: 400;
-}
-
-.qnh-low,
-.qnh-very-high {
-  color: var(--strong);
-  font-weight: 700;
-}
-
-.qnh-very-low {
-  color: var(--severe);
-  font-weight: 700;
-}
-
-.qnh-high {
-  color: var(--breezy);
-  font-weight: 700;
-}
-
-.cloud-indent {
-  margin-left: 20px;
-}
-
-/* Footer */
-
-.footer {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
-  color: var(--muted);
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.footer-label {
-  color: var(--muted);
-}
-
-.small {
-  color: #7f94ad;
-  font-size: 11px;
-}
-
-/* Desktop */
-
-@media (min-width: 700px) {
-  body {
-    padding: 28px;
-  }
-
-  .card {
-    padding: 20px;
-  }
-
-  .title {
-    font-size: 20px;
-  }
-
-  .decoded {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-items: start;
-    column-gap: 24px;
-    row-gap: 12px;
-  }
+@media (max-width: 420px) {
 
   .airport-selector {
-    grid-template-columns: 36px minmax(0, 1fr) 36px;
-  }
-
-  .nav-arrow {
-    width: 36px;
-  }
-}
-
-/* Mobile */
-
-@media (max-width: 480px) {
-  body {
-    padding: 10px;
-  }
-
-  .airport-selector {
-    grid-template-columns: 32px minmax(0, 1fr) 32px;
     gap: 4px;
+    margin: 8px 0;
   }
 
-  .nav-arrow {
-    width: 32px;
-    min-width: 32px;
-    min-height: 36px;
-    font-size: 23px;
+  .airport-selector .nav-arrow {
+    flex-basis: 30px !important;
+    width: 30px !important;
+    min-width: 30px !important;
+    max-width: 30px !important;
+
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+
+    border-radius: 9px;
+    font-size: 25px;
   }
 
-  .tab {
-    padding: 9px 2px;
-    font-size: 12px;
+  .airport-selector .tabs-viewport {
+    height: 40px !important;
   }
 
-  .card {
-    padding: 12px;
-    border-radius: 12px;
-  }
-
-  .title {
-    font-size: 16px;
-  }
-
-  .raw {
-    font-size: 12px;
-  }
-
-  .decoded {
-    padding: 7px;
-    font-size: 12px;
-  }
-
-  .search-results {
-    max-height: 55vh;
-  }
-}
-
-/* Very small phones */
-
-@media (max-width: 360px) {
-  body {
-    padding: 8px;
-  }
-
-  .airport-selector {
-    grid-template-columns: 30px minmax(0, 1fr) 30px;
+  .airport-selector .tabs {
+    height: 40px !important;
     gap: 3px;
   }
 
-  .nav-arrow {
-    width: 30px;
-    min-width: 30px;
-    font-size: 22px;
+  .airport-selector .tab {
+    height: 40px !important;
+    min-height: 40px !important;
+
+    padding: 0 2px !important;
+
+    font-size: 12px;
+  }
+}
+
+/* =========================================================
+   VERY SMALL PHONES
+   ========================================================= */
+
+@media (max-width: 340px) {
+
+  .airport-selector .nav-arrow {
+    flex-basis: 27px !important;
+    width: 27px !important;
+    min-width: 27px !important;
+    max-width: 27px !important;
+
+    font-size: 23px;
   }
 
-  .tab {
+  .airport-selector .tab {
     font-size: 11px;
   }
 }
